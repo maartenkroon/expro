@@ -1,4 +1,4 @@
-# Armatiek XProc – an XProc 3.1 processor for Java
+# Expro – an XProc 3.1 processor for Java
 
 An implementation of [XProc 3.1: An XML Pipeline Language](https://spec.xproc.org/3.1/xproc/)
 and the required steps of the
