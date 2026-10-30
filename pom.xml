@@ -15,6 +15,7 @@
   <modules>
     <module>xproc-core</module>
     <module>xproc-cli</module>
+    <module>xproc-rest</module>
   </modules>
 
   <properties>

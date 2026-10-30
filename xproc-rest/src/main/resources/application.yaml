@@ -1,0 +1,17 @@
+spring:
+  application:
+    name: xproc-rest
+  jackson:
+    default-property-inclusion: non_null
+  servlet:
+    multipart:
+      enabled: false
+xproc:
+  # Pipelines are supplied by clients, so access to local files and the network is off by default
+  allow-file-access: false
+  allow-network-access: false
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
