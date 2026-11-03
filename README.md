@@ -6,8 +6,10 @@ and the required steps of the
 [Saxon-HE](https://www.saxonica.com/) 13.1 and Java 25. It also implements the steps of the
 optional [file](https://spec.xproc.org/3.1/file/),
 [operating system](https://spec.xproc.org/3.1/os/),
-[`p:run`](https://spec.xproc.org/3.1/run/) and
-[validation](https://spec.xproc.org/3.1/validation/) step libraries.
+[`p:run`](https://spec.xproc.org/3.1/run/),
+[validation](https://spec.xproc.org/3.1/validation/),
+[mail](https://spec.xproc.org/3.1/mail/) and [text](https://spec.xproc.org/3.1/text/) step
+libraries.
 
 The project consists of three Maven modules:
 
@@ -144,7 +146,7 @@ Stored pipelines are kept in memory. The service is configured with Spring Boot 
 | Property                     | Default | Meaning                                         |
 |------------------------------|---------|-------------------------------------------------|
 | `xproc.allow-file-access`    | `false` | Allow pipelines to read and write `file:` URIs  |
-| `xproc.allow-network-access` | `false` | Allow pipelines to access the network           |
+| `xproc.allow-network-access` | `false` | Allow pipelines to access the network (and send mail) |
 | `xproc.allow-os-access`      | `false` | Allow `p:os-exec` and the details of `p:os-info` |
 | `xproc.locale`               |         | The value of the `p:locale` system property     |
 | `xproc.max-pipelines`        | `1000`  | The maximum number of stored pipelines          |
@@ -169,17 +171,19 @@ the standard step library. The optional step libraries are implemented as well:
 * **Validation steps**: `p:validate-with-relax-ng`, `p:validate-with-schematron`,
   `p:validate-with-xml-schema`, `p:validate-with-nvdl`, `p:validate-with-json-schema` and
   `p:validate-with-dtd`.
+* **Mail steps**: `p:send-mail`.
+* **Text steps**: `p:markdown-to-html`.
 
 PSVI support, XQuery function imports, and the DTD compatibility attribute defaults of
 `p:validate-with-relax-ng` (`dtd-attribute-values`) are not implemented.
 
 The processor has been tested against the
-[XProc test suite](https://codeberg.org/XProc/test-suite). Of the 2957 tests that apply to
-this processor, 2927 pass (99.0%). Every test of the file, operating system, `p:run` and
-validation steps that applies passes. The suite's other 406 tests were skipped because they
-need optional features, a Windows host (`p:urify` Windows behaviour), XProc 3.2, or the
-suite's Docker-based HTTP test server. `p:http-request` is covered by this project's own
-tests against an in-process HTTP server instead.
+[XProc test suite](https://codeberg.org/XProc/test-suite). Of the 2959 tests that apply to
+this processor, 2929 pass (99.0%). Every test of the file, operating system, `p:run`,
+validation and text steps that applies passes. The suite's other 404 tests were skipped
+because they need optional features, a Windows host (`p:urify` Windows behaviour), XProc 3.2,
+or the suite's Docker-based HTTP and mail test servers. `p:http-request` and `p:send-mail` are
+covered by this project's own tests against an in-process HTTP and SMTP server instead.
 
 Most of the 30 failing tests are cases where a test expects a different error code from the
 one the specification names. In those cases this implementation follows the specification:
@@ -277,6 +281,28 @@ behaviour. The most relevant choices are:
     output (`err:XC0207`). A missing primary on either side also counts as a mismatch.
   * A `p:run-input` that provides no documents leaves the default connection of the
     pipeline's port in place, if it has one.
+* **Mail steps** (`p:send-mail`, with [Jakarta Mail](https://eclipse-ee4j.github.io/angus-mail/)):
+  * The first document is a message in the format of
+    [draft-klyne-message-rfc822-xml](https://datatracker.ietf.org/doc/html/draft-klyne-message-rfc822-xml-03).
+    Its root is `emx:Message` (namespace `URN:ietf:params:email-xml:`). The headers are
+    elements in the `URN:ietf:params:rfc822:` namespace: `from`, `to`, `cc`, `bcc`,
+    `reply-to` and `sender` contain `emx:Address` elements (with `emx:adrs`, a `mailto:` URI,
+    and an optional `emx:name`) or a comma separated address list as text. `subject` is the
+    subject, and any other element becomes a header with that name.
+  * An `emx:content` with element content is sent as `text/html`. Otherwise its text is sent
+    with the media type in its `type` attribute (default `text/plain`), in UTF-8. Without
+    `emx:content`, the second document is the body.
+  * Other documents are attachments, serialized as `p:store` would. The last segment of
+    their base URI is the file name. With attachments the message is `multipart/mixed`.
+  * Parameters: `host` (default `localhost`), `port` (default 25), `send-authorization`,
+    and the implementation-defined `starttls`, `ssl` (SMTPS) and `debug` (Jakarta Mail
+    protocol trace), all booleans that default to false. `auth` takes `username` and
+    `password`. Sending mail counts as network access.
+* **Text steps**: `p:markdown-to-html` converts
+  [CommonMark](https://spec.commonmark.org/) with the GitHub Flavored Markdown table and
+  strikethrough extensions ([commonmark-java](https://github.com/commonmark/commonmark-java)).
+  The result is a `text/html` document with `html`, `head` and `body` elements in the XHTML
+  namespace. The `parameters` option is not used.
 * **Validation steps**:
   * The `xvrl` report format is supported by every validation step. `p:validate-with-schematron`
     also supports `svrl`, its default. Other values raise `err:XC0117`.
@@ -313,8 +339,8 @@ xproc-core/src/main/java/nl/armatiek/xproc/internal/
     io/        document loading (XML, HTML, text, JSON, binary) and serialization
     steps/     implementations of the standard steps
 xproc-core/src/main/resources/nl/armatiek/xproc/steps.xpl   step declarations
-xproc-core/src/main/resources/nl/armatiek/xproc/*-steps.xpl declarations of the file, os and
-                                                            validation steps
+xproc-core/src/main/resources/nl/armatiek/xproc/*-steps.xpl declarations of the file, os,
+                                                            validation, mail and text steps
 xproc-cli/src/main/java/nl/armatiek/xproc/cli/Main.java     command line interface
 xproc-rest/src/main/resources/static/openapi.yaml           REST interface specification
 xproc-rest/src/main/java/nl/armatiek/xproc/rest/

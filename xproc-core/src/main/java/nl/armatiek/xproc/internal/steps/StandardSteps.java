@@ -16,6 +16,8 @@ final class StandardSteps {
     OsSteps.register(r);
     ValidationSteps.register(r);
     r.register("run", RunStep::new);
+    MailSteps.register(r);
+    TextFormatSteps.register(r);
     r.register("xinclude", XIncludeStep::new);
     r.register("http-request", HttpRequestStep::new);
   }

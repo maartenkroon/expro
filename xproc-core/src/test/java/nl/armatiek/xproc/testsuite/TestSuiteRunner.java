@@ -61,7 +61,8 @@ public final class TestSuiteRunner {
       "directory-list", "file-copy", "file-delete", "file-info", "file-mkdir", "file-move",
       "file-create-tempfile", "file-touch", "os-info", "os-exec", "validate-with-relax-ng",
       "validate-with-schematron", "validate-with-xml-schema", "validate-with-nvdl",
-      "validate-with-json-schema", "validate-with-dtd", "run", "run-input", "run-option");
+      "validate-with-json-schema", "validate-with-dtd", "run", "run-input", "run-option",
+      "markdown-to-html", "send-mail");
 
   /** Optional features supported by this processor. */
   private static final Set<String> FEATURES = Set.of("archive-order", "HOF", "no-psvi-support",
@@ -71,7 +72,8 @@ public final class TestSuiteRunner {
       "p:file-delete", "p:file-info", "p:file-mkdir", "p:file-move", "p:file-create-tempfile",
       "p:file-touch", "os-info", "os-exec", "p-validate-with-relax-ng",
       "p-validate-with-schematron", "p-validate-with-xsd", "p-validate-with-nvdl",
-      "p-validate-with-json-schema", "p-validate-with-dtd", "p-run", "dtd-id-ref-warning");
+      "p-validate-with-json-schema", "p-validate-with-dtd", "p-run", "dtd-id-ref-warning",
+      "markdown-to-html");
 
   enum Outcome {
     PASS, FAIL, SKIP

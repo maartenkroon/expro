@@ -28,6 +28,8 @@
     <jing.version>20241231</jing.version>
     <schxslt2.version>1.11.3</schxslt2.version>
     <json-schema-validator.version>3.0.8</json-schema-validator.version>
+    <angus-mail.version>2.0.5</angus-mail.version>
+    <commonmark.version>0.32.0</commonmark.version>
   </properties>
 
   <dependencyManagement>
@@ -66,6 +68,28 @@
         <groupId>com.networknt</groupId>
         <artifactId>json-schema-validator</artifactId>
         <version>${json-schema-validator.version}</version>
+      </dependency>
+      <dependency>
+        <!-- p:send-mail (Jakarta Mail) -->
+        <groupId>org.eclipse.angus</groupId>
+        <artifactId>angus-mail</artifactId>
+        <version>${angus-mail.version}</version>
+      </dependency>
+      <dependency>
+        <!-- p:markdown-to-html -->
+        <groupId>org.commonmark</groupId>
+        <artifactId>commonmark</artifactId>
+        <version>${commonmark.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.commonmark</groupId>
+        <artifactId>commonmark-ext-gfm-tables</artifactId>
+        <version>${commonmark.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.commonmark</groupId>
+        <artifactId>commonmark-ext-gfm-strikethrough</artifactId>
+        <version>${commonmark.version}</version>
       </dependency>
       <dependency>
         <groupId>nl.armatiek.xproc</groupId>

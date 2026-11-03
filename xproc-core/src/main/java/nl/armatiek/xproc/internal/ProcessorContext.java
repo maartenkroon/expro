@@ -7,6 +7,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Properties;
+import java.util.Set;
 import java.util.UUID;
 
 import net.sf.saxon.expr.XPathContext;
@@ -157,7 +158,8 @@ public final class ProcessorContext {
     if ("file".equals(scheme) && !config.isAllowFileAccess()) {
       throw XProcException.xd(21, "Access to file resources is not allowed: " + uri);
     }
-    if (("http".equals(scheme) || "https".equals(scheme)) && !config.isAllowNetworkAccess()) {
+    if (Set.of("http", "https", "smtp", "smtps").contains(scheme)
+        && !config.isAllowNetworkAccess()) {
       throw XProcException.xd(21, "Network access is not allowed: " + uri);
     }
   }
