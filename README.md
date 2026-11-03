@@ -8,8 +8,8 @@ optional [file](https://spec.xproc.org/3.1/file/),
 [operating system](https://spec.xproc.org/3.1/os/),
 [`p:run`](https://spec.xproc.org/3.1/run/),
 [validation](https://spec.xproc.org/3.1/validation/),
-[mail](https://spec.xproc.org/3.1/mail/) and [text](https://spec.xproc.org/3.1/text/) step
-libraries.
+[mail](https://spec.xproc.org/3.1/mail/), [text](https://spec.xproc.org/3.1/text/) and
+[Invisible XML](https://spec.xproc.org/3.1/ixml/) step libraries.
 
 The project consists of three Maven modules:
 
@@ -173,16 +173,18 @@ the standard step library. The optional step libraries are implemented as well:
   `p:validate-with-dtd`.
 * **Mail steps**: `p:send-mail`.
 * **Text steps**: `p:markdown-to-html`.
+* **Invisible XML**: `p:invisible-xml` (and its former name `p:ixml`).
 
 PSVI support and the DTD compatibility attribute defaults of
 `p:validate-with-relax-ng` (`dtd-attribute-values`) are not implemented.
 
 The processor has been tested against the
 [XProc test suite](https://codeberg.org/XProc/test-suite), with the suite's Docker-based HTTP
-test server running. Of the 3121 tests that apply to this processor, 3092 pass (99.1%). Every
-test of the file, operating system, `p:run`, validation and text steps that applies passes,
+test server running. Of the 3133 tests that apply to this processor, 3104 pass (99.1%). Every
+test of the file, operating system, `p:run`, validation, text and Invisible XML steps that
+applies passes,
 126 of the 127 `p:http-request` tests pass, and 53 of the 56 `p:import-functions` and
-`p:function-library-importable` tests pass. The suite's other 242 tests were skipped
+`p:function-library-importable` tests pass. The suite's other 230 tests were skipped
 because they need optional features, a Windows host (`p:urify` Windows behaviour), XProc 3.2,
 internet access, or the suite's mail test server. `p:send-mail` is covered by this project's
 own tests against an in-process SMTP server instead.
@@ -319,6 +321,17 @@ behaviour. The most relevant choices are:
   strikethrough extensions ([commonmark-java](https://github.com/commonmark/commonmark-java)).
   The result is a `text/html` document with `html`, `head` and `body` elements in the XHTML
   namespace. The `parameters` option is not used.
+* **Invisible XML** (`p:invisible-xml`, with
+  [Markup Blitz](https://github.com/GuntherRademacher/markup-blitz)):
+  * The grammar may be in the text form or the XML form of Invisible XML. Without a grammar,
+    the source is parsed with the Invisible XML grammar itself. Generated parsers are cached
+    (the 32 most recently used grammars).
+  * Text sources are parsed as they are, JSON sources as their serialization, and other
+    sources as their bytes decoded with the `charset` of their content type (default UTF-8).
+  * The result is always one `application/xml` document. When the parse fails and
+    `fail-on-error` is false, it is an `ixml` element with `ixml:state="failed"` and the error
+    message. An ambiguous parse returns one of the parses, marked `ixml:state="ambiguous"`.
+  * The `parameters` option is not used. The former step name `p:ixml` is supported.
 * **Validation steps**:
   * The `xvrl` report format is supported by every validation step. `p:validate-with-schematron`
     also supports `svrl`, its default. Other values raise `err:XC0117`.
@@ -356,7 +369,7 @@ xproc-core/src/main/java/nl/armatiek/xproc/internal/
     steps/     implementations of the standard steps
 xproc-core/src/main/resources/nl/armatiek/xproc/steps.xpl   step declarations
 xproc-core/src/main/resources/nl/armatiek/xproc/*-steps.xpl declarations of the file, os,
-                                                            validation, mail and text steps
+                                                            validation, mail, text and ixml steps
 xproc-cli/src/main/java/nl/armatiek/xproc/cli/Main.java     command line interface
 xproc-rest/src/main/resources/static/openapi.yaml           REST interface specification
 xproc-rest/src/main/java/nl/armatiek/xproc/rest/

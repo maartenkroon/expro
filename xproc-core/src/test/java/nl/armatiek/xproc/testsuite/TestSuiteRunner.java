@@ -65,7 +65,7 @@ public final class TestSuiteRunner {
       "file-create-tempfile", "file-touch", "os-info", "os-exec", "validate-with-relax-ng",
       "validate-with-schematron", "validate-with-xml-schema", "validate-with-nvdl",
       "validate-with-json-schema", "validate-with-dtd", "run", "run-input", "run-option",
-      "markdown-to-html", "send-mail");
+      "markdown-to-html", "send-mail", "invisible-xml", "ixml");
 
   /** Optional features supported by this processor. */
   private static final Set<String> FEATURES = Set.of("archive-order", "HOF", "no-psvi-support",
@@ -76,7 +76,7 @@ public final class TestSuiteRunner {
       "p:file-touch", "os-info", "os-exec", "p-validate-with-relax-ng",
       "p-validate-with-schematron", "p-validate-with-xsd", "p-validate-with-nvdl",
       "p-validate-with-json-schema", "p-validate-with-dtd", "p-run", "dtd-id-ref-warning",
-      "markdown-to-html");
+      "markdown-to-html", "p:ixml");
 
   /** The HTTP server used by the p:http-request tests (the test suite's Docker container). */
   private static final String HTTP_HOST = "localhost";

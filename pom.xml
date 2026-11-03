@@ -30,6 +30,7 @@
     <json-schema-validator.version>3.0.8</json-schema-validator.version>
     <angus-mail.version>2.0.5</angus-mail.version>
     <commonmark.version>0.32.0</commonmark.version>
+    <markup-blitz.version>1.13</markup-blitz.version>
   </properties>
 
   <dependencyManagement>
@@ -90,6 +91,11 @@
         <groupId>org.commonmark</groupId>
         <artifactId>commonmark-ext-gfm-strikethrough</artifactId>
         <version>${commonmark.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>de.bottlecaps</groupId>
+        <artifactId>markup-blitz</artifactId>
+        <version>${markup-blitz.version}</version>
       </dependency>
       <dependency>
         <groupId>nl.armatiek.xproc</groupId>
