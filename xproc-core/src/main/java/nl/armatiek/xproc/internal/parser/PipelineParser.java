@@ -11,6 +11,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.PriorityQueue;
 import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import javax.xml.transform.stream.StreamSource;
 
@@ -24,11 +26,14 @@ import net.sf.saxon.s9api.XdmNode;
 import net.sf.saxon.s9api.XdmNodeKind;
 import net.sf.saxon.s9api.XdmValue;
 import net.sf.saxon.s9api.XsltCompiler;
+import net.sf.saxon.s9api.XQueryCompiler;
+import net.sf.saxon.s9api.XQueryExecutable;
 import net.sf.saxon.s9api.XsltPackage;
 import nl.armatiek.xproc.MediaType;
 import nl.armatiek.xproc.Ns;
 import nl.armatiek.xproc.XProcException;
 import nl.armatiek.xproc.internal.ProcessorContext;
+import nl.armatiek.xproc.internal.xpath.ImportedFunctions;
 import nl.armatiek.xproc.internal.model.AtomicStep;
 import nl.armatiek.xproc.internal.model.Binder;
 import nl.armatiek.xproc.internal.model.Binding;
@@ -97,7 +102,7 @@ public final class PipelineParser {
 
   /** Information needed to parse the body of a declaration. */
   private record DeclInfo(TypeScope scope, Map<QName, Binder> staticBindings,
-      List<XsltPackage> functions, Set<String> excludedNs, boolean expandText,
+      List<ImportedFunctions> functions, Set<String> excludedNs, boolean expandText,
       String defaultName, List<XdmNode> bodyElements, List<XdmNode> outputElements) {
   }
 
@@ -112,7 +117,7 @@ public final class PipelineParser {
     Binding.Pipe drp;
     boolean expandText = true;
     Set<String> excludedNs = new HashSet<>();
-    List<XsltPackage> functions = new ArrayList<>();
+    List<ImportedFunctions> functions = new ArrayList<>();
     /** The node currently being parsed (receives references). */
     Node current;
     StepDeclaration decl;
@@ -227,7 +232,7 @@ public final class PipelineParser {
    * body is parsed later.
    */
   private StepDeclaration parseSignature(XdmNode el, TypeScope parentScope,
-      Map<QName, Binder> inheritedStatic, List<XsltPackage> inheritedFunctions,
+      Map<QName, Binder> inheritedStatic, List<ImportedFunctions> inheritedFunctions,
       Set<String> inheritedExcluded, boolean inheritedExpandText, String defaultName,
       boolean inLibrary) {
     checkAttributes(el, Set.of("name", "type", "psvi-required", "xpath-version",
@@ -268,7 +273,8 @@ public final class PipelineParser {
 
     TypeScope scope = new TypeScope(parentScope, pc.standardSteps);
     Map<QName, Binder> staticBindings = new LinkedHashMap<>(inheritedStatic);
-    List<XsltPackage> functions = new ArrayList<>(inheritedFunctions);
+    List<ImportedFunctions> functions = new ArrayList<>(inheritedFunctions);
+    List<ImportedFunctions> localFunctions = new ArrayList<>();
 
     checkNoText(el);
     registerForward(el, scope, staticBindings, d);
@@ -304,7 +310,10 @@ public final class PipelineParser {
               "p:import-functions must precede the prologue"));
         }
         // functions imported here take precedence over inherited ones
-        functions.add(0, importFunctions(child));
+        ImportedFunctions imported = importFunctions(child);
+        checkDuplicates(child, imported, localFunctions);
+        localFunctions.add(imported);
+        functions.add(0, imported);
         continue;
       }
       if (isP(child, "input") || isP(child, "output") || isP(child, "option")) {
@@ -515,7 +524,7 @@ public final class PipelineParser {
   }
 
   private PortDecl parseInputDecl(XdmNode el, Map<QName, Binder> staticBindings,
-      TypeScope scope, List<XsltPackage> functions, Set<String> excluded, boolean expandText,
+      TypeScope scope, List<ImportedFunctions> functions, Set<String> excluded, boolean expandText,
       StepDeclaration d) {
     checkAttributes(el, Set.of("port", "sequence", "primary", "select", "content-types", "href",
         "exclude-inline-prefixes", "use-when", "expand-text"));
@@ -578,7 +587,7 @@ public final class PipelineParser {
   }
 
   private OptionDecl parseOptionDecl(XdmNode el, Map<QName, Binder> bindings,
-      List<XsltPackage> functions, TypeScope scope, StepDeclaration d, boolean inLibrary) {
+      List<ImportedFunctions> functions, TypeScope scope, StepDeclaration d, boolean inLibrary) {
     checkAttributes(el, Set.of("name", "as", "values", "static", "required", "select",
         "visibility", "use-when", "expand-text"));
     String nameAttr = requiredAttr(el, "name");
@@ -776,7 +785,7 @@ public final class PipelineParser {
     TypeScope scope = new TypeScope(null, pc.standardSteps);
     lib.scope = scope;
     Map<QName, Binder> staticBindings = new LinkedHashMap<>();
-    List<XsltPackage> functions = new ArrayList<>();
+    List<ImportedFunctions> functions = new ArrayList<>();
     Set<String> excluded = excludedNamespaces(root);
     boolean expandText = expandTextOf(root, true);
     int phase = 0;
@@ -807,7 +816,9 @@ public final class PipelineParser {
           throw loc(child, XProcException.xs(100,
               "p:import-functions must precede the prologue"));
         }
-        functions.add(importFunctions(child));
+        ImportedFunctions imported = importFunctions(child);
+        checkDuplicates(child, imported, functions);
+        functions.add(imported);
       } else if (isP(child, "option")) {
         if (phase > 1) {
           throw loc(child, XProcException.xs(100, "p:option must precede the declarations"));
@@ -867,7 +878,7 @@ public final class PipelineParser {
     }
   }
 
-  private XsltPackage importFunctions(XdmNode el) {
+  private ImportedFunctions importFunctions(XdmNode el) {
     checkAttributes(el, Set.of("href", "content-type", "namespace", "use-when"));
     String href = requiredAttr(el, "href");
     String ct = el.getAttributeValue(new QName("content-type"));
@@ -877,23 +888,81 @@ public final class PipelineParser {
           uri.getPath());
       ct = guess == null ? "application/xslt+xml" : guess;
     }
-    if (!(ct.equals("application/xslt+xml") || ct.equals("text/xsl")
+    boolean xquery = ct.equals("application/xquery");
+    if (!xquery && !(ct.equals("application/xslt+xml") || ct.equals("text/xsl")
         || ct.equals("application/xml"))) {
       throw loc(el, XProcException.xs(104, "Cannot import function libraries of type " + ct));
     }
+    String nsAttr = el.getAttributeValue(new QName("namespace"));
+    Set<String> namespaces = nsAttr == null ? null
+        : new HashSet<>(List.of(nsAttr.trim().split("\\s+")));
+    java.util.function.Predicate<String> filter = ns -> namespaces == null
+        || namespaces.contains(ns);
     byte[] bytes;
     try {
       bytes = pc.loader.read(uri).bytes();
     } catch (XProcException e) {
       throw loc(el, XProcException.xs(103, "Cannot retrieve function library " + uri));
     }
-    XsltCompiler xc = pc.processor.newXsltCompiler();
     try {
-      return xc.compilePackage(new StreamSource(new java.io.ByteArrayInputStream(bytes),
-          uri.toString()));
-    } catch (SaxonApiException e) {
+      if (xquery) {
+        return ImportedFunctions.of(compileXQuery(bytes, uri), filter);
+      }
+      XsltCompiler xc = pc.processor.newXsltCompiler();
+      XsltPackage pkg = xc.compilePackage(new StreamSource(
+          new java.io.ByteArrayInputStream(bytes), uri.toString()));
+      if (pkg.getUnderlyingPreparedPackage().getComponentIndex().values().stream()
+          .anyMatch(c -> c.getVisibility() == net.sf.saxon.trans.Visibility.ABSTRACT)) {
+        throw loc(el, XProcException.xs(106, "Cannot load function library " + uri
+            + ": it contains abstract components"));
+      }
+      return ImportedFunctions.of(pkg, filter);
+    } catch (SaxonApiException | net.sf.saxon.trans.XPathException e) {
       throw loc(el, XProcException.xs(106, "Cannot load function library " + uri + ": "
           + e.getMessage()));
+    }
+  }
+
+  private static final Pattern LIBRARY_MODULE = Pattern.compile(
+      "^(?:\\s|\\(:.*?:\\))*(?:xquery\\s+(?:version|encoding)[^;]*;)?(?:\\s|\\(:.*?:\\))*"
+      + "module\\s+namespace\\s+[\\w.-]+\\s*=\\s*([\"'])(.*?)\\1", Pattern.DOTALL);
+
+  /**
+   * Compiles an XQuery main or library module and returns the functions it declares.
+   */
+  private net.sf.saxon.query.XQueryFunctionLibrary compileXQuery(byte[] bytes, URI uri)
+      throws SaxonApiException {
+    String text = nl.armatiek.xproc.internal.io.DocumentLoader.decodeText(bytes, null);
+    XQueryCompiler qc = pc.processor.newXQueryCompiler();
+    qc.setBaseURI(uri);
+    // Errors are reported through the exception (as err:XS0106)
+    qc.setErrorReporter(error -> {
+    });
+    Matcher m = LIBRARY_MODULE.matcher(text);
+    XQueryExecutable exec;
+    if (m.find()) {
+      // Saxon-HE cannot compile a library module separately: import it from a main module and
+      // supply its text when the import is resolved
+      String moduleNs = m.group(2);
+      qc.setModuleURIResolver((moduleUri, base, locations) -> moduleUri.equals(moduleNs)
+          ? new StreamSource[] {new StreamSource(new java.io.StringReader(text),
+              uri.toString())}
+          : null);
+      exec = qc.compile("import module namespace m = '" + moduleNs.replace("'", "''")
+          + "'; ()");
+    } else {
+      exec = qc.compile(text);
+    }
+    return exec.getUnderlyingCompiledQuery().getMainModule().getGlobalFunctionLibrary();
+  }
+
+  /** Raises err:XS0105 if an imported function has the same name and arity as another. */
+  private void checkDuplicates(XdmNode el, ImportedFunctions imported,
+      List<ImportedFunctions> others) {
+    var dup = imported.firstDuplicate(others);
+    if (dup != null) {
+      throw loc(el, XProcException.xs(105, "Function " + dup.getComponentName().getEQName()
+          + "#" + dup.getArity() + " is imported more than once"));
     }
   }
 
@@ -2512,12 +2581,12 @@ public final class PipelineParser {
   // Expressions
 
   private ExprContext exprContext(XdmNode el, Map<QName, Binder> bindings,
-      List<XsltPackage> functions, TypeScope scope, StepDeclaration decl) {
+      List<ImportedFunctions> functions, TypeScope scope, StepDeclaration decl) {
     return exprContext(el, bindings, functions, scope, decl, false);
   }
 
   private ExprContext exprContext(XdmNode el, Map<QName, Binder> bindings,
-      List<XsltPackage> functions, TypeScope scope, StepDeclaration decl, boolean useWhen) {
+      List<ImportedFunctions> functions, TypeScope scope, StepDeclaration decl, boolean useWhen) {
     Map<String, String> ns = ExprContext.namespacesOf(el);
     if (standardMode) {
       ns.putIfAbsent("xs", Ns.XS);

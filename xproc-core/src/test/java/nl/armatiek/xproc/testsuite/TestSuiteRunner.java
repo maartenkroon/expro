@@ -71,7 +71,7 @@ public final class TestSuiteRunner {
   private static final Set<String> FEATURES = Set.of("archive-order", "HOF", "no-psvi-support",
       "p-count", "p-count-limit", "urify-non-windows", "xquery_1_0", "xquery_3_0", "xquery_3_1",
       "xslt-1", "xslt-1-output-base-uri", "xslt-2", "xslt-3", "xslt-serialization",
-      "xslt-function-import", "mac/linux", "file-steps", "p:directory-list", "p:file-copy",
+      "xslt-function-import", "xquery-function-import", "mac/linux", "file-steps", "p:directory-list", "p:file-copy",
       "p:file-delete", "p:file-info", "p:file-mkdir", "p:file-move", "p:file-create-tempfile",
       "p:file-touch", "os-info", "os-exec", "p-validate-with-relax-ng",
       "p-validate-with-schematron", "p-validate-with-xsd", "p-validate-with-nvdl",

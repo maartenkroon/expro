@@ -24,7 +24,6 @@ import net.sf.saxon.s9api.XPathSelector;
 import net.sf.saxon.s9api.XdmEmptySequence;
 import net.sf.saxon.s9api.XdmItem;
 import net.sf.saxon.s9api.XdmValue;
-import net.sf.saxon.s9api.XsltPackage;
 import net.sf.saxon.trans.XPathException;
 import nl.armatiek.xproc.Ns;
 import nl.armatiek.xproc.XProcException;
@@ -137,8 +136,13 @@ public final class XPathEngine {
         xc.declareVariable(name);
       }
     }
-    for (XsltPackage pkg : ctx.functionLibraries) {
-      xc.addXsltFunctionLibrary(pkg);
+    if (!ctx.functionLibraries.isEmpty()) {
+      var functions = (net.sf.saxon.functions.FunctionLibraryList)
+          ((net.sf.saxon.sxpath.AbstractStaticContext) xc.getUnderlyingStaticContext())
+          .getFunctionLibrary();
+      for (ImportedFunctions f : ctx.functionLibraries) {
+        functions.addFunctionLibrary(f);
+      }
     }
     return xc;
   }

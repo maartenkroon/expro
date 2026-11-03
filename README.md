@@ -174,23 +174,25 @@ the standard step library. The optional step libraries are implemented as well:
 * **Mail steps**: `p:send-mail`.
 * **Text steps**: `p:markdown-to-html`.
 
-PSVI support, XQuery function imports, and the DTD compatibility attribute defaults of
+PSVI support and the DTD compatibility attribute defaults of
 `p:validate-with-relax-ng` (`dtd-attribute-values`) are not implemented.
 
 The processor has been tested against the
 [XProc test suite](https://codeberg.org/XProc/test-suite), with the suite's Docker-based HTTP
-test server running. Of the 3086 tests that apply to this processor, 3055 pass (99.0%). Every
+test server running. Of the 3121 tests that apply to this processor, 3092 pass (99.1%). Every
 test of the file, operating system, `p:run`, validation and text steps that applies passes,
-and 126 of the 127 `p:http-request` tests pass. The suite's other 277 tests were skipped
+126 of the 127 `p:http-request` tests pass, and 53 of the 56 `p:import-functions` and
+`p:function-library-importable` tests pass. The suite's other 242 tests were skipped
 because they need optional features, a Windows host (`p:urify` Windows behaviour), XProc 3.2,
 internet access, or the suite's mail test server. `p:send-mail` is covered by this project's
 own tests against an in-process SMTP server instead.
 
-Most of the 31 failing tests are cases where a test expects something other than what the
+Most of the 29 failing tests are cases where a test expects something other than what the
 specification says. In those cases this implementation follows the specification:
 
 * `p:http-request` with the `status-only` parameter returns an empty map of headers on the
   `report` port, as the specification requires (the test expects the response headers).
+* `err:XS0103` (not `XS0106`) for a `p:import-functions` library that cannot be retrieved.
 * `err:XS0094` (not `XS0038`) for a `p:variable` without `select`.
 * `err:XS0088` (not `XS0091`) for a variable that shadows a static option.
 * `err:XS0027` (not `XS0080`) for an option given both as an attribute and with
@@ -198,7 +200,8 @@ specification says. In those cases this implementation follows the specification
 * `err:XD0065` (not `XD0001`) for a context sequence in `p:with-option`/value templates.
 
 A few other edge cases remain open: some `p:cast-content-type` and override-content-type error
-codes, `p:import-functions` error codes, and a few base URI and `use-when` corner cases.
+codes, the error code for a wrong argument type of `p:function-library-importable`, and a few
+base URI and `use-when` corner cases.
 
 To run the test suite yourself:
 
@@ -248,7 +251,11 @@ behaviour. The most relevant choices are:
 * **Timeouts**: `[p:]timeout` values are validated but not enforced.
 * **Messages**: `[p:]message`, `p:message`, `xsl:message` and `fn:message` output goes to the
   configured `MessageListener` (standard error by default).
-* **`p:import-functions`**: XSLT packages (`application/xslt+xml`) only.
+* **`p:import-functions`**: XSLT packages (`application/xslt+xml`) and XQuery main and library
+  modules (`application/xquery`). Without a `content-type` attribute, the type is derived from
+  the file extension (`.xq`, `.xqy`, `.xquery` for XQuery), and XSLT is assumed otherwise. The
+  public functions of an XSLT package and the non-private functions of an XQuery module are
+  imported. XQuery functions can use the global variables of their module.
 * **Steps**:
   * `p:xslt` runs XSLT 1.0 and 2.0 stylesheets with the XSLT 3.0 processor, applying the
     version specific invocation rules; static parameters are supported.

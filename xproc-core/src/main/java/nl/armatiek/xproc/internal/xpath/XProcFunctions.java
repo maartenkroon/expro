@@ -94,7 +94,8 @@ public final class XProcFunctions {
           state();
           String ct = str(args[0]).trim();
           return BooleanValue.get(ct.equals("application/xslt+xml")
-              || ct.equals("text/xsl") || ct.equals("application/xml+xslt"));
+              || ct.equals("text/xsl") || ct.equals("application/xml+xslt")
+              || ct.equals("application/xquery"));
         }));
     p.registerExtensionFunction(new Fn("lookup-uri", 1, 1, SequenceType.SINGLE_ANY_URI,
         args -> {

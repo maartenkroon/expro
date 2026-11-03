@@ -7,7 +7,7 @@ import java.util.List;
 import java.util.Map;
 
 import net.sf.saxon.s9api.XdmNode;
-import net.sf.saxon.s9api.XsltPackage;
+import nl.armatiek.xproc.internal.xpath.ImportedFunctions;
 
 /**
  * The static context of an expression: in-scope namespaces, base URI, location, the in-scope
@@ -21,12 +21,12 @@ public final class ExprContext {
   public final Location location;
   /** In-scope variable bindings (in lexical order; later entries shadow earlier ones). */
   public final Map<net.sf.saxon.s9api.QName, Binder> bindings;
-  public final List<XsltPackage> functionLibraries;
+  public final List<ImportedFunctions> functionLibraries;
   /** Answers p:step-available() for expressions in this context. */
   public java.util.function.Predicate<net.sf.saxon.s9api.QName> stepAvailable = q -> false;
 
   public ExprContext(Map<String, String> namespaces, URI baseUri, Location location,
-      Map<net.sf.saxon.s9api.QName, Binder> bindings, List<XsltPackage> functionLibraries) {
+      Map<net.sf.saxon.s9api.QName, Binder> bindings, List<ImportedFunctions> functionLibraries) {
     this.namespaces = Collections.unmodifiableMap(new LinkedHashMap<>(namespaces));
     this.baseUri = baseUri;
     this.location = location;
