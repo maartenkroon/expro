@@ -329,6 +329,9 @@ components:
         networkAccess:
           type: boolean
           description: Whether pipelines may access the network
+        osAccess:
+          type: boolean
+          description: Whether pipelines may run commands (p:os-exec) and read the environment
     PipelineDescription:
       type: object
       required: [id, inputs, outputs, options]

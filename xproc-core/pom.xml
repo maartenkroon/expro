@@ -23,6 +23,18 @@
       <artifactId>htmlparser</artifactId>
     </dependency>
     <dependency>
+      <groupId>org.relaxng</groupId>
+      <artifactId>jing</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>name.dmaus.schxslt</groupId>
+      <artifactId>schxslt2</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>com.networknt</groupId>
+      <artifactId>json-schema-validator</artifactId>
+    </dependency>
+    <dependency>
       <groupId>org.junit.jupiter</groupId>
       <artifactId>junit-jupiter</artifactId>
     </dependency>

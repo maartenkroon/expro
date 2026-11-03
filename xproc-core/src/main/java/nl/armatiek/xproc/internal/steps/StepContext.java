@@ -10,6 +10,7 @@ import net.sf.saxon.s9api.XdmValue;
 import nl.armatiek.xproc.MessageListener;
 import nl.armatiek.xproc.XProcDocument;
 import nl.armatiek.xproc.internal.ProcessorContext;
+import nl.armatiek.xproc.internal.model.StepDeclaration;
 
 /** What an external step implementation sees of its invocation. */
 public interface StepContext {
@@ -54,4 +55,9 @@ public interface StepContext {
   void output(String port, XProcDocument doc);
 
   MessageListener messages();
+
+  /** The declaration of the step (for p:run, the declaration of the invocation). */
+  default StepDeclaration declaration() {
+    return null;
+  }
 }

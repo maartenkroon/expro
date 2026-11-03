@@ -26,6 +26,8 @@ public final class StepDeclaration {
   public boolean bodyParsed;
   /** True for external steps (declarations without a subpipeline). */
   public boolean external;
+  /** For the declaration of a p:run invocation: what it declares about the run pipeline. */
+  public RunInfo run;
 
   public StepDeclaration(XdmNode element) {
     this.element = element;

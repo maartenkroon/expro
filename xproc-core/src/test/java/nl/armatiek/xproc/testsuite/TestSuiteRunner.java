@@ -57,13 +57,21 @@ public final class TestSuiteRunner {
       "set-attributes", "set-properties", "sink", "sleep", "split-sequence", "store",
       "string-replace", "text-count", "text-head", "text-join", "text-replace", "text-sort",
       "text-tail", "unarchive", "uncompress", "unwrap", "uuid", "wrap", "wrap-sequence",
-      "www-form-urldecode", "www-form-urlencode", "xinclude", "xquery", "xslt");
+      "www-form-urldecode", "www-form-urlencode", "xinclude", "xquery", "xslt",
+      "directory-list", "file-copy", "file-delete", "file-info", "file-mkdir", "file-move",
+      "file-create-tempfile", "file-touch", "os-info", "os-exec", "validate-with-relax-ng",
+      "validate-with-schematron", "validate-with-xml-schema", "validate-with-nvdl",
+      "validate-with-json-schema", "validate-with-dtd", "run", "run-input", "run-option");
 
   /** Optional features supported by this processor. */
   private static final Set<String> FEATURES = Set.of("archive-order", "HOF", "no-psvi-support",
       "p-count", "p-count-limit", "urify-non-windows", "xquery_1_0", "xquery_3_0", "xquery_3_1",
       "xslt-1", "xslt-1-output-base-uri", "xslt-2", "xslt-3", "xslt-serialization",
-      "xslt-function-import", "mac/linux");
+      "xslt-function-import", "mac/linux", "file-steps", "p:directory-list", "p:file-copy",
+      "p:file-delete", "p:file-info", "p:file-mkdir", "p:file-move", "p:file-create-tempfile",
+      "p:file-touch", "os-info", "os-exec", "p-validate-with-relax-ng",
+      "p-validate-with-schematron", "p-validate-with-xsd", "p-validate-with-nvdl",
+      "p-validate-with-json-schema", "p-validate-with-dtd", "p-run", "dtd-id-ref-warning");
 
   enum Outcome {
     PASS, FAIL, SKIP
@@ -90,13 +98,18 @@ public final class TestSuiteRunner {
     Map<String, Result> results = new TreeMap<>();
     ExecutorService pool = Executors.newFixedThreadPool(Math.max(2,
         Runtime.getRuntime().availableProcessors()));
+    // Tests that use the shared "testfolder" or run commands run one at a time
+    ExecutorService serial = Executors.newSingleThreadExecutor();
     Map<String, Future<Result>> futures = new LinkedHashMap<>();
     for (Path f : files) {
       String name = f.getFileName().toString();
       if (filter != null && !filter.matcher(name).find()) {
         continue;
       }
-      futures.put(name, pool.submit(() -> runner.run(f)));
+      String text = Files.readString(f);
+      boolean isSerial = text.contains("testfolder") || text.contains("file-environment")
+          || text.contains("os-exec");
+      futures.put(name, (isSerial ? serial : pool).submit(() -> runner.run(f)));
     }
     for (Map.Entry<String, Future<Result>> e : futures.entrySet()) {
       Result r;
@@ -111,6 +124,7 @@ public final class TestSuiteRunner {
       results.put(e.getKey(), r);
     }
     pool.shutdownNow();
+    serial.shutdownNow();
     int pass = 0;
     int fail = 0;
     int skip = 0;
@@ -149,7 +163,7 @@ public final class TestSuiteRunner {
       if (src != null) {
         pipeline = db.build(new File(file.getParent().toFile(), src));
       } else {
-        pipeline = firstElement(pipelineEl);
+        pipeline = withoutNamespace(firstElement(pipelineEl), T);
       }
       String features = test.getAttributeValue(new QName("features"));
       if (features != null) {
@@ -163,9 +177,6 @@ public final class TestSuiteRunner {
       if (optional != null) {
         return new Result(name, Outcome.SKIP, "uses optional step p:" + optional);
       }
-      if (child(test, new QName(T, "file-environment")) != null) {
-        return new Result(name, Outcome.SKIP, "requires a file environment");
-      }
       String version = pipeline.getAttributeValue(new QName("version"));
       if (version == null && pipeline.getNodeKind() == XdmNodeKind.DOCUMENT) {
         version = firstElement(pipeline).getAttributeValue(new QName("version"));
@@ -173,6 +184,77 @@ public final class TestSuiteRunner {
       if (version != null && !version.equals("3.0") && !version.equals("3.1")) {
         return new Result(name, Outcome.SKIP, "XProc version " + version);
       }
+      XdmNode environment = child(test, new QName(T, "file-environment"));
+      Path testfolder = file.toAbsolutePath().getParent().getParent().resolve("testfolder");
+      if (environment != null) {
+        createEnvironment(environment, testfolder);
+      }
+      try {
+        return execute(name, file, test, expected, pipeline);
+      } finally {
+        if (environment != null) {
+          deleteTree(testfolder);
+        }
+      }
+    } catch (Throwable e) {
+      return new Result(name, Outcome.FAIL, "exception " + e);
+    }
+  }
+
+  /** Creates the files and folders of a t:file-environment in the test folder. */
+  private static void createEnvironment(XdmNode environment, Path testfolder) throws Exception {
+    deleteTree(testfolder);
+    Files.createDirectories(testfolder);
+    for (XdmNode e : environment.children()) {
+      if (e.getNodeKind() != XdmNodeKind.ELEMENT) {
+        continue;
+      }
+      Path p = testfolder.resolve(e.getAttributeValue(new QName("path")));
+      if ("true".equals(e.getAttributeValue(new QName("hidden")))
+          && !System.getProperty("os.name").startsWith("Windows")) {
+        // On Unix-like systems, hidden files are files whose name starts with a dot
+        p = p.resolveSibling("." + p.getFileName());
+      }
+      if (e.getNodeName().getLocalName().equals("folder")) {
+        Files.createDirectories(p);
+      } else {
+        Files.createDirectories(p.getParent());
+        Files.writeString(p, e.getStringValue());
+      }
+      String modified = e.getAttributeValue(new QName("last-modified"));
+      if (modified != null) {
+        Files.setLastModifiedTime(p, java.nio.file.attribute.FileTime.from(
+            java.time.OffsetDateTime.parse(modified).toInstant()));
+      }
+      if ("false".equals(e.getAttributeValue(new QName("readable")))) {
+        p.toFile().setReadable(false, false);
+      }
+      if ("false".equals(e.getAttributeValue(new QName("writable")))) {
+        p.toFile().setWritable(false, false);
+      }
+    }
+  }
+
+  private static void deleteTree(Path p) throws java.io.IOException {
+    if (!Files.exists(p, java.nio.file.LinkOption.NOFOLLOW_LINKS)) {
+      return;
+    }
+    p.toFile().setReadable(true, false);
+    p.toFile().setWritable(true, false);
+    p.toFile().setExecutable(true, false);
+    if (Files.isDirectory(p, java.nio.file.LinkOption.NOFOLLOW_LINKS)) {
+      try (var s = Files.list(p)) {
+        for (Path c : s.toList()) {
+          deleteTree(c);
+        }
+      }
+    }
+    Files.delete(p);
+  }
+
+  private Result execute(String name, Path file, XdmNode test, String expected,
+      XdmNode pipeline) throws Exception {
+    {
       Map<QName, XdmValue> statics = new LinkedHashMap<>();
       for (XdmNode o : children(test, new QName(T, "option"))) {
         if ("true".equals(o.getAttributeValue(new QName("static")))) {
@@ -193,7 +275,8 @@ public final class TestSuiteRunner {
           } else {
             for (XdmNode content : in.children()) {
               if (content.getNodeKind() == XdmNodeKind.ELEMENT) {
-                list.add(processor.newDocument(content, MediaType.XML, file.toUri()));
+                list.add(processor.newDocument(withoutTestNamespace(content), MediaType.XML,
+                    file.toUri()));
               }
             }
           }
@@ -255,9 +338,44 @@ public final class TestSuiteRunner {
         }
         return new Result(name, Outcome.FAIL, "unexpected error " + e);
       }
-    } catch (Throwable e) {
-      return new Result(name, Outcome.FAIL, "exception " + e);
     }
+  }
+
+  private static final String STRIP_NAMESPACE = """
+      <xsl:stylesheet xmlns:xsl="http://www.w3.org/1999/XSL/Transform" version="3.0">
+        <xsl:param name="ns"/>
+        <xsl:template match="*">
+          <xsl:element name="{name()}" namespace="{namespace-uri()}">
+            <xsl:copy-of select="namespace::*[. ne $ns or name() eq prefix-from-QName(
+                node-name(current()))]"/>
+            <xsl:apply-templates select="@*, node()"/>
+          </xsl:element>
+        </xsl:template>
+        <xsl:template match="@*|text()|comment()|processing-instruction()">
+          <xsl:copy/>
+        </xsl:template>
+      </xsl:stylesheet>""";
+
+  /** Copies an element without the binding of a namespace it does not use itself. */
+  private XdmNode withoutNamespace(XdmNode element, String ns) throws Exception {
+    var xc = processor.getSaxonProcessor().newXsltCompiler();
+    var t = xc.compile(new javax.xml.transform.stream.StreamSource(
+        new java.io.StringReader(STRIP_NAMESPACE))).load30();
+    t.setStylesheetParameters(Map.of(new QName("ns"), new net.sf.saxon.s9api.XdmAtomicValue(ns)));
+    t.setGlobalContextItem(element);
+    var dest = new net.sf.saxon.s9api.XdmDestination();
+    dest.setBaseURI(element.getBaseURI());
+    t.applyTemplates(element, dest);
+    return dest.getXdmNode();
+  }
+
+  /** Copies an inline input document without the namespaces of the test document. */
+  private XdmNode withoutTestNamespace(XdmNode content) throws Exception {
+    var xq = processor.getSaxonProcessor().newXQueryCompiler().compile(
+        "declare copy-namespaces no-preserve, inherit; declare variable $e external; "
+        + "document { $e }").load();
+    xq.setExternalVariable(new QName("e"), content);
+    return (XdmNode) xq.evaluateSingle();
   }
 
   private static boolean serializeFirst(XdmNode schematron) {
@@ -336,6 +454,9 @@ public final class TestSuiteRunner {
           .toString()).resolve(schSrc))));
     }
     XPathCompiler xc = processor.getSaxonProcessor().newXPathCompiler();
+    if (schema.getBaseURI() != null) {
+      xc.setBaseURI(schema.getBaseURI());
+    }
     for (XdmNode ns : schema.axisIterator(Axis.NAMESPACE).stream().toList()) {
       String prefix = ns.getNodeName() == null ? "" : ns.getNodeName().getLocalName();
       if (!prefix.isEmpty()) {

@@ -40,6 +40,7 @@ import nl.armatiek.xproc.internal.model.Node;
 import nl.armatiek.xproc.internal.model.OptionDecl;
 import nl.armatiek.xproc.internal.model.OptionValue;
 import nl.armatiek.xproc.internal.model.PortDecl;
+import nl.armatiek.xproc.internal.model.RunInfo;
 import nl.armatiek.xproc.internal.model.StepDeclaration;
 import nl.armatiek.xproc.internal.model.StepNode;
 import nl.armatiek.xproc.internal.model.ValueTemplate;
@@ -140,30 +141,36 @@ public final class PipelineParser {
   // =========================================================================================
   // Entry points
 
+  /** The resources holding the declarations of the standard and additional step libraries. */
+  private static final List<String> STEP_LIBRARIES = List.of("steps.xpl", "file-steps.xpl",
+      "os-steps.xpl", "validation-steps.xpl");
+
   /** Parses the standard step library declarations into the processor context. */
   public static void loadStandardLibrary(ProcessorContext pc) {
     PipelineParser parser = new PipelineParser(pc, Map.of());
     parser.standardMode = true;
-    try (InputStream in = PipelineParser.class.getResourceAsStream(
-        "/nl/armatiek/xproc/steps.xpl")) {
-      DocumentBuilder db = pc.processor.newDocumentBuilder();
-      XdmNode doc = db.build(new StreamSource(in, "http://www.w3.org/ns/xproc/steps.xpl"));
-      XdmNode root = firstElement(doc);
-      TypeScope scope = new TypeScope(null, Map.of());
-      for (XdmNode child : root.children()) {
-        if (child.getNodeKind() == XdmNodeKind.ELEMENT && isP(child, "declare-step")) {
-          StepDeclaration d = parser.parseSignature(child, scope, new LinkedHashMap<>(),
-              List.of(), new HashSet<>(), true, "!std", false);
-          if (d.type.getLocalName().equals("namespace-rename")) {
-            for (OptionDecl od : d.options.values()) {
-              od.noResolve = true;
+    for (String lib : STEP_LIBRARIES) {
+      try (InputStream in = PipelineParser.class.getResourceAsStream(
+          "/nl/armatiek/xproc/" + lib)) {
+        DocumentBuilder db = pc.processor.newDocumentBuilder();
+        XdmNode doc = db.build(new StreamSource(in, "http://www.w3.org/ns/xproc/" + lib));
+        XdmNode root = firstElement(doc);
+        TypeScope scope = new TypeScope(null, Map.of());
+        for (XdmNode child : root.children()) {
+          if (child.getNodeKind() == XdmNodeKind.ELEMENT && isP(child, "declare-step")) {
+            StepDeclaration d = parser.parseSignature(child, scope, new LinkedHashMap<>(),
+                List.of(), new HashSet<>(), true, "!std", false);
+            if (d.type.getLocalName().equals("namespace-rename")) {
+              for (OptionDecl od : d.options.values()) {
+                od.noResolve = true;
+              }
             }
+            pc.standardSteps.put(d.type, d);
           }
-          pc.standardSteps.put(d.type, d);
         }
+      } catch (Exception e) {
+        throw new IllegalStateException("Cannot load the step library " + lib, e);
       }
-    } catch (Exception e) {
-      throw new IllegalStateException("Cannot load the standard step library", e);
     }
   }
 
@@ -1069,7 +1076,7 @@ public final class PipelineParser {
     }
     s.type = elName;
     if (s instanceof AtomicStep a) {
-      StepDeclaration d = env.types.lookup(elName);
+      StepDeclaration d = isP(el, "run") ? runDeclaration(el, env) : env.types.lookup(elName);
       if (d == null) {
         throw loc(el, XProcException.xs(44, "No declaration for step "
             + QNames.display(elName)));
@@ -1197,12 +1204,90 @@ public final class PipelineParser {
         return null;
       }
     }
-    StepDeclaration d = env.types.lookup(n);
+    StepDeclaration d = isP(stepEl, "run") ? runDeclaration(stepEl, env) : env.types.lookup(n);
     if (d == null) {
       return null;
     }
     PortDecl p = d.primaryOutput();
     return p == null ? null : p.name;
+  }
+
+  /**
+   * Builds the declaration of a p:run invocation from its p:run-input, p:run-option and
+   * p:output children.
+   */
+  private StepDeclaration runDeclaration(XdmNode el, Env env) {
+    StepDeclaration d = new StepDeclaration(el);
+    d.type = el.getNodeName();
+    d.external = true;
+    d.bodyParsed = true;
+    RunInfo run = new RunInfo();
+    d.run = run;
+    PortDecl pipeline = new PortDecl(RunInfo.PIPELINE_PORT, true);
+    pipeline.primary = false;
+    pipeline.primarySpecified = false;
+    pipeline.contentTypes = MediaType.parseContentTypes("xml");
+    d.inputs.put(pipeline.name, pipeline);
+    List<XdmNode> runInputs = new ArrayList<>();
+    List<XdmNode> outputs = new ArrayList<>();
+    for (XdmNode child : elementChildren(el, env.bindings, env.types, env.decl)) {
+      if (isP(child, "run-input")) {
+        runInputs.add(child);
+      } else if (isP(child, "output")) {
+        outputs.add(child);
+      } else if (isP(child, "run-option")) {
+        QName name = parseQName(child, requiredAttr(child, "name"), 77);
+        if (d.options.containsKey(name)) {
+          throw loc(child, XProcException.xs(80, "Duplicate p:run-option for "
+              + QNames.display(name)));
+        }
+        OptionDecl od = new OptionDecl(name);
+        od.location = Location.of(child);
+        d.options.put(name, od);
+        if (booleanAttr(child, "static", false)) {
+          run.staticOptions.add(name);
+        }
+      }
+    }
+    for (XdmNode ri : runInputs) {
+      String port = requiredAttr(ri, "port");
+      if (!QNames.isNCName(port)) {
+        throw loc(ri, XProcException.xs(77, "Invalid port name: " + port));
+      }
+      if (d.inputs.containsKey(port)) {
+        throw loc(ri, XProcException.xs(86, "Duplicate p:run-input for port " + port));
+      }
+      PortDecl p = new PortDecl(port, true);
+      p.sequence = true;
+      p.contentTypes = MediaType.parseContentTypes(null);
+      String primary = ri.getAttributeValue(new QName("primary"));
+      p.primary = primary == null ? runInputs.size() == 1 : booleanAttr(ri, "primary", false);
+      p.primarySpecified = primary == null ? null : p.primary;
+      if (p.primary) {
+        if (run.primaryInput != null) {
+          throw loc(ri, XProcException.xs(30, "More than one primary p:run-input"));
+        }
+        run.primaryInput = port;
+      }
+      run.inputs.add(port);
+      d.inputs.put(port, p);
+    }
+    for (XdmNode o : outputs) {
+      checkAttributes(o, Set.of("port", "primary", "sequence", "content-types",
+          "serialization", "use-when"));
+      if (hasConnection(o)) {
+        throw loc(o, XProcException.xs(100, "An output of p:run cannot have a connection"));
+      }
+      PortDecl p = parsePortCommon(o, false, true);
+      if (d.outputs.containsKey(p.name)) {
+        throw loc(o, XProcException.xs(11, "Duplicate port name: " + p.name));
+      }
+      d.outputs.put(p.name, p);
+    }
+    finishPorts(el, d.outputs, false);
+    PortDecl po = d.primaryOutput();
+    run.primaryOutput = po == null ? null : po.name;
+    return d;
   }
 
   private boolean isStepElement(XdmNode el) {
@@ -1311,8 +1396,24 @@ public final class PipelineParser {
     // children
     Map<String, XdmNode> withInputs = new LinkedHashMap<>();
     Map<QName, XdmNode> withOptions = new LinkedHashMap<>();
+    boolean isRun = decl.run != null;
     for (XdmNode child : elementChildren(el, env.bindings, env.types, env.decl)) {
-      if (isP(child, "with-input")) {
+      if (isRun && (isP(child, "with-input") || isP(child, "run-input"))) {
+        String port = isP(child, "with-input") ? RunInfo.PIPELINE_PORT
+            : child.getAttributeValue(PORT);
+        if (isP(child, "with-input") && child.getAttributeValue(PORT) != null) {
+          throw loc(child, XProcException.xs(100, "The p:with-input of p:run has no port "
+              + "attribute"));
+        }
+        if (withInputs.containsKey(port)) {
+          throw loc(child, XProcException.xs(86, "Duplicate input for port " + port));
+        }
+        withInputs.put(port, child);
+      } else if (isRun && isP(child, "run-option")) {
+        withOptions.put(parseQName(child, requiredAttr(child, "name"), 77), child);
+      } else if (isRun && isP(child, "output")) {
+        continue;
+      } else if (isP(child, "with-input")) {
         String port = child.getAttributeValue(PORT);
         if (port == null) {
           PortDecl primary = decl.primaryInput();
@@ -1350,9 +1451,16 @@ public final class PipelineParser {
     for (PortDecl port : decl.inputs.values()) {
       XdmNode wi = withInputs.get(port.name);
       Connection conn;
-      if (wi != null) {
-        checkAttributes(wi, Set.of("port", "select", "href", "pipe", "exclude-inline-prefixes",
+      if (wi != null && isP(wi, "run-input") && !port.primary && !hasConnection(wi)) {
+        // A non-primary p:run-input without a connection is empty
+        checkAttributes(wi, Set.of("port", "primary", "select", "exclude-inline-prefixes",
             "use-when", "expand-text"));
+        conn = new Connection();
+        conn.bindings.add(new Binding.Empty());
+      } else if (wi != null) {
+        checkAttributes(wi, isP(wi, "run-input") ? Set.of("port", "primary", "select", "href",
+            "pipe", "exclude-inline-prefixes", "use-when", "expand-text") : Set.of("port",
+            "select", "href", "pipe", "exclude-inline-prefixes", "use-when", "expand-text"));
         Env ienv = env.copy();
         ienv.expandText = expandTextOf(wi, env.expandText);
         conn = parseConnection(wi, ienv, ConnKind.WITH_INPUT, null);
@@ -1413,8 +1521,10 @@ public final class PipelineParser {
     }
     for (Map.Entry<QName, XdmNode> e : withOptions.entrySet()) {
       XdmNode wo = e.getValue();
-      checkAttributes(wo, Set.of("name", "as", "select", "collection", "href", "pipe",
-          "exclude-inline-prefixes", "use-when", "expand-text"));
+      checkAttributes(wo, isRun ? Set.of("name", "as", "select", "collection", "href", "pipe",
+          "static", "exclude-inline-prefixes", "use-when", "expand-text") : Set.of("name", "as",
+          "select", "collection", "href", "pipe", "exclude-inline-prefixes", "use-when",
+          "expand-text"));
       OptionDecl od = decl.options.get(e.getKey());
       if (od.isStatic) {
         throw loc(wo, XProcException.xs(92, "Cannot set the value of static option "

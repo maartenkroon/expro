@@ -44,7 +44,8 @@ class XProcRestApplicationTest {
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.xprocVersion").value("3.1"))
         .andExpect(jsonPath("$.saxonEdition").value("HE"))
-        .andExpect(jsonPath("$.fileAccess").value(false));
+        .andExpect(jsonPath("$.fileAccess").value(false))
+        .andExpect(jsonPath("$.osAccess").value(false));
   }
 
   @Test
@@ -220,6 +221,21 @@ class XProcRestApplicationTest {
             .content("{\"inputs\": {\"source\": [{\"href\": \"file:///etc/hosts\"}]}}"))
         .andExpect(status().isUnprocessableContent())
         .andExpect(jsonPath("$.code").value("Q{http://www.w3.org/ns/xproc-error}XD0021"));
+  }
+
+  @Test
+  void runningCommandsIsForbiddenByDefault() throws Exception {
+    store("exec", """
+        <p:declare-step xmlns:p="http://www.w3.org/ns/xproc" version="3.1">
+          <p:output port="result"/>
+          <p:os-exec command="echo" args="hello">
+            <p:with-input><p:empty/></p:with-input>
+          </p:os-exec>
+        </p:declare-step>""");
+    mvc.perform(post(API + "/pipelines/exec/runs").contentType(MediaType.APPLICATION_JSON)
+            .content("{}"))
+        .andExpect(status().isUnprocessableContent())
+        .andExpect(jsonPath("$.code").value("Q{http://www.w3.org/ns/xproc-error}XC0033"));
   }
 
   @Test

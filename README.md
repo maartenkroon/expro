@@ -3,7 +3,11 @@
 An implementation of [XProc 3.1: An XML Pipeline Language](https://spec.xproc.org/3.1/xproc/)
 and the required steps of the
 [XProc 3.1 Standard Step Library](https://spec.xproc.org/3.1/steps/), built on
-[Saxon-HE](https://www.saxonica.com/) 13.1 and Java 25.
+[Saxon-HE](https://www.saxonica.com/) 13.1 and Java 25. It also implements the steps of the
+optional [file](https://spec.xproc.org/3.1/file/),
+[operating system](https://spec.xproc.org/3.1/os/),
+[`p:run`](https://spec.xproc.org/3.1/run/) and
+[validation](https://spec.xproc.org/3.1/validation/) step libraries.
 
 The project consists of three Maven modules:
 
@@ -45,7 +49,7 @@ Usage: xproc [options] PIPELINE [NAME=VALUE ...]
   -s, --static NAME=VALUE     Set the value of a static option.
   -n, --namespace PREFIX=URI  Bind a prefix for option names and XPath expressions.
       --serialize NAME=VALUE  Serialization parameter for stdout (e.g. indent=true).
-      --safe                  Forbid file and network access.
+      --safe                  Forbid file and network access and running commands.
   -q, --quiet                 Suppress messages.
   -v, --verbose               Report timings and stack traces.
 ```
@@ -141,28 +145,43 @@ Stored pipelines are kept in memory. The service is configured with Spring Boot 
 |------------------------------|---------|-------------------------------------------------|
 | `xproc.allow-file-access`    | `false` | Allow pipelines to read and write `file:` URIs  |
 | `xproc.allow-network-access` | `false` | Allow pipelines to access the network           |
+| `xproc.allow-os-access`      | `false` | Allow `p:os-exec` and the details of `p:os-info` |
 | `xproc.locale`               |         | The value of the `p:locale` system property     |
 | `xproc.max-pipelines`        | `1000`  | The maximum number of stored pipelines          |
 
-Clients supply the pipelines they run, so file and network access are off by default. Do not
-turn them on for a service that untrusted clients can reach. The service has no
+Clients supply the pipelines they run, so file, network and operating system access are off
+by default. With file access off, the file steps fail with their "access restrictions" error
+codes. With OS access off, `p:os-exec` fails with `err:XC0033`, and `p:os-info` reports no
+environment variables and leaves the user and working directory attributes empty. Do not turn
+these settings on for a service that untrusted clients can reach. The service has no
 authentication of its own, so put it behind a gateway that adds authentication before you
 expose it.
 
 ## Conformance
 
 All features of the core language are implemented, together with all 51 required steps of
-the standard step library. Optional features (such as the `p:file-*`, `p:os-*`, `p:run` and
-validation steps, PSVI support, and XQuery function imports) are not implemented.
+the standard step library. The optional step libraries are implemented as well:
+
+* **File steps**: `p:directory-list`, `p:file-copy`, `p:file-delete`, `p:file-info`,
+  `p:file-mkdir`, `p:file-move`, `p:file-create-tempfile` and `p:file-touch`.
+* **Operating system steps**: `p:os-info` and `p:os-exec`.
+* **Dynamic pipeline execution**: `p:run`.
+* **Validation steps**: `p:validate-with-relax-ng`, `p:validate-with-schematron`,
+  `p:validate-with-xml-schema`, `p:validate-with-nvdl`, `p:validate-with-json-schema` and
+  `p:validate-with-dtd`.
+
+PSVI support, XQuery function imports, and the DTD compatibility attribute defaults of
+`p:validate-with-relax-ng` (`dtd-attribute-values`) are not implemented.
 
 The processor has been tested against the
-[XProc test suite](https://codeberg.org/XProc/test-suite). Of the 2453 tests that apply to
-this processor, 2421 pass (98.7%). The suite's other 910 tests were skipped because they need
-optional features, a Windows host (`p:urify` Windows behaviour), XProc 3.2, or the suite's
-Docker-based HTTP test server. `p:http-request` is covered by this project's own tests against
-an in-process HTTP server instead.
+[XProc test suite](https://codeberg.org/XProc/test-suite). Of the 2957 tests that apply to
+this processor, 2927 pass (99.0%). Every test of the file, operating system, `p:run` and
+validation steps that applies passes. The suite's other 406 tests were skipped because they
+need optional features, a Windows host (`p:urify` Windows behaviour), XProc 3.2, or the
+suite's Docker-based HTTP test server. `p:http-request` is covered by this project's own
+tests against an in-process HTTP server instead.
 
-Most of the 32 failing tests are cases where a test expects a different error code from the
+Most of the 30 failing tests are cases where a test expects a different error code from the
 one the specification names. In those cases this implementation follows the specification:
 
 * `err:XS0094` (not `XS0038`) for a `p:variable` without `select`.
@@ -181,7 +200,9 @@ git clone https://codeberg.org/XProc/test-suite.git
 ./mvnw -pl xproc-core test -Dtest=TestSuiteTest -Dxproc.testsuite=$PWD/test-suite/test-suite/tests
 ```
 
-The report is written to `xproc-core/target/testsuite-report.txt`.
+The report is written to `xproc-core/target/testsuite-report.txt`. The runner sets up the
+`t:file-environment` of the file step tests in the suite's `testfolder` directory. On
+Unix-like systems it creates files marked as hidden with a name that starts with a dot.
 
 ## Implementation-defined features
 
@@ -226,6 +247,59 @@ behaviour. The most relevant choices are:
   * `p:compare`: the `deep-equal` method only.
   * `p:http-request`: methods GET, POST, PUT, DELETE, HEAD, PATCH, OPTIONS and TRACE; Basic
     and Digest authentication; redirects are followed by default.
+* **File steps**:
+  * Only `file:` URIs are supported; other schemes raise the step's "scheme not supported"
+    error. Access is subject to the file access setting of the configuration.
+  * Results are a `c:result` element that contains the (resolved) URI given in the step's
+    `href` or `target` option. For `p:file-create-tempfile` it contains the URI of the new file.
+  * With `fail-on-error="false"`, errors are reported as a `c:error` element. Its `code` and
+    `type` attributes give the error code and the step type in Clark notation
+    (`{uri}local`), and its content is the error message.
+  * `p:directory-list` and `p:file-info` report `content-type`, `readable`, `writable`,
+    `last-modified` (UTC) and `size`. `hidden` is only reported when it is true. Symbolic
+    links are followed. Objects that are neither files nor directories are listed as
+    `c:other`. Entries are sorted by name.
+  * `p:file-copy` and `p:file-move` copy or move a file into the target when the target is an
+    existing directory or ends with a slash. A directory is always copied into the target
+    directory. An invalid `max-depth` of `p:directory-list` raises `err:XD0028`.
+  * The default location of `p:file-create-tempfile` is the JVM temporary directory.
+* **Operating system steps**:
+  * `p:os-info` returns the JVM's `os.arch`, `os.name`, `os.version`, `user.dir`,
+    `user.name` and `user.home` properties, and one `c:environment` element per
+    environment variable.
+  * `p:os-exec` runs the command without a shell, in the JVM's working directory unless `cwd`
+    is given. The exit status is the text of the `c:result` element on `exit-status`.
+* **`p:run`**:
+  * Each `p:run` compiles its pipeline when it runs. Errors in that pipeline raise
+    `err:XC0200`.
+  * If `p:run` has `p:run-input`s, its primary input must be the pipeline's primary input
+    (`err:XC0206`). If it declares outputs, its primary output must be the pipeline's primary
+    output (`err:XC0207`). A missing primary on either side also counts as a mismatch.
+  * A `p:run-input` that provides no documents leaves the default connection of the
+    pipeline's port in place, if it has one.
+* **Validation steps**:
+  * The `xvrl` report format is supported by every validation step. `p:validate-with-schematron`
+    also supports `svrl`, its default. Other values raise `err:XC0117`.
+  * RELAX NG (XML and compact syntax) and NVDL use [Jing](https://github.com/relaxng/jing-trang).
+    `dtd-id-idref-warnings` is supported; `dtd-attribute-values` is not. Within NVDL, W3C XML
+    Schema validation is done by the JDK's validator.
+  * Schematron uses [SchXslt2](https://github.com/schxslt/schxslt2) (`xslt2`/`xslt3` query
+    bindings). Entries of the `c:compile` parameter are passed to the SchXslt2 transpiler.
+    Other parameters are passed to the generated stylesheet as stylesheet parameters.
+    `c:implementation` and `c:xvrl` are ignored. In XVRL reports, the `role` of an assertion
+    sets the severity: `fatal`, `warning`/`warn`, `info`/`information`, otherwise `error`.
+  * XML Schema uses the JDK's validator (XML Schema 1.0 only; other versions raise
+    `err:XC0011`). Default attribute values are added to valid documents. There is no PSVI.
+    The schemas on the `schema` port take precedence. `use-location-hints` adds the schemas
+    named by `xsi:schemaLocation` and `xsi:noNamespaceSchemaLocation`, and `try-namespaces`
+    tries to load a schema from each namespace URI. `xs:include` and `xs:import` references
+    to documents on the `schema` port are resolved to those documents. Lax mode ignores a
+    missing declaration of the document element.
+  * DTD validation re-parses the serialized document with the JDK's validating parser.
+  * JSON Schema uses the [networknt validator](https://github.com/networknt/json-schema-validator)
+    and supports drafts 4, 6, 7, 2019-09 and 2020-12. A `$schema` in the schema wins; then
+    `default-version` (a dialect URI or a name such as `2020-12` or `draft-07`) applies, and
+    the default is 2020-12.
 
 ## Project layout
 
@@ -239,6 +313,8 @@ xproc-core/src/main/java/nl/armatiek/xproc/internal/
     io/        document loading (XML, HTML, text, JSON, binary) and serialization
     steps/     implementations of the standard steps
 xproc-core/src/main/resources/nl/armatiek/xproc/steps.xpl   step declarations
+xproc-core/src/main/resources/nl/armatiek/xproc/*-steps.xpl declarations of the file, os and
+                                                            validation steps
 xproc-cli/src/main/java/nl/armatiek/xproc/cli/Main.java     command line interface
 xproc-rest/src/main/resources/static/openapi.yaml           REST interface specification
 xproc-rest/src/main/java/nl/armatiek/xproc/rest/

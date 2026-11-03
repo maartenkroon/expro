@@ -26,6 +26,7 @@ public class ProcessorController implements ProcessorApi {
         processor.getProductVersion(), "3.1", saxon.getSaxonProductVersion(),
         saxon.getSaxonEdition())
         .fileAccess(props.allowFileAccess())
-        .networkAccess(props.allowNetworkAccess()));
+        .networkAccess(props.allowNetworkAccess())
+        .osAccess(props.allowOsAccess()));
   }
 }

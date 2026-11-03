@@ -24,6 +24,7 @@ public class WebConfig implements WebMvcConfigurer {
     XProcConfiguration config = new XProcConfiguration()
         .setAllowFileAccess(props.allowFileAccess())
         .setAllowNetworkAccess(props.allowNetworkAccess())
+        .setAllowOsAccess(props.allowOsAccess())
         .setMessageListener(listener);
     if (props.locale() != null) {
       config.setLocale(props.locale());

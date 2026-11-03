@@ -84,7 +84,8 @@ public final class Main {
                                     expressions.
             --serialize NAME=VALUE  Set a serialization parameter for standard output
                                     (for example indent=true).
-            --safe                  Forbid file and network access to resources.
+            --safe                  Forbid file and network access to resources and
+                                    running commands (p:os-exec).
         -q, --quiet                 Suppress messages ([p:]message, p:message, xsl:message).
         -v, --verbose               Report run times and stack traces on errors.
         -h, --help                  Show this help.
@@ -183,7 +184,8 @@ public final class Main {
     XProcConfiguration config = new XProcConfiguration()
         .setMessageListener(quiet ? MessageListener.SILENT : MessageListener.STDERR)
         .setAllowFileAccess(!safe)
-        .setAllowNetworkAccess(!safe);
+        .setAllowNetworkAccess(!safe)
+        .setAllowOsAccess(!safe);
     try {
       XProcProcessor processor = new XProcProcessor(config);
       Map<QName, XdmValue> staticValues = new LinkedHashMap<>();

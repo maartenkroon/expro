@@ -8,6 +8,7 @@ import org.springframework.boot.context.properties.bind.DefaultValue;
  *
  * @param allowFileAccess whether pipelines may read and write file: URIs
  * @param allowNetworkAccess whether pipelines may access the network
+ * @param allowOsAccess whether pipelines may run commands and read the environment
  * @param locale the value of the p:locale system property (null for the default)
  * @param maxPipelines the maximum number of stored pipelines
  */
@@ -15,6 +16,7 @@ import org.springframework.boot.context.properties.bind.DefaultValue;
 public record XProcProperties(
     @DefaultValue("false") boolean allowFileAccess,
     @DefaultValue("false") boolean allowNetworkAccess,
+    @DefaultValue("false") boolean allowOsAccess,
     String locale,
     @DefaultValue("1000") int maxPipelines) {
 }

@@ -301,6 +301,11 @@ public final class Executor {
       public MessageListener messages() {
         return pc.messages();
       }
+
+      @Override
+      public StepDeclaration declaration() {
+        return s.decl;
+      }
     };
     try {
       impl.run(ctx);
@@ -879,7 +884,8 @@ public final class Executor {
 
   private Ctx contextFromDocs(List<XProcDocument> docs, boolean collection) {
     if (docs == null) {
-      return Ctx.UNDEFINED;
+      // Without a default readable port the default collection is empty
+      return collection ? new Ctx(null, ContextState.UNDEFINED, List.of()) : Ctx.UNDEFINED;
     }
     register(docs);
     if (collection) {

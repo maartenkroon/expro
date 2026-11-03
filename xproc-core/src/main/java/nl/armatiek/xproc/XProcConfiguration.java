@@ -21,6 +21,7 @@ public final class XProcConfiguration {
   private final Map<QName, XdmValue> staticOptions = new LinkedHashMap<>();
   private boolean allowFileAccess = true;
   private boolean allowNetworkAccess = true;
+  private boolean allowOsAccess = true;
   private String locale = java.util.Locale.getDefault().toLanguageTag();
 
   public XProcConfiguration() {
@@ -94,6 +95,20 @@ public final class XProcConfiguration {
     return allowNetworkAccess;
   }
 
+  /**
+   * Allows or forbids access to the operating system: running commands with p:os-exec
+   * (err:XC0033 if forbidden) and the environment and user details of p:os-info (empty if
+   * forbidden). Default: allowed.
+   */
+  public XProcConfiguration setAllowOsAccess(boolean allow) {
+    this.allowOsAccess = allow;
+    return this;
+  }
+
+  public boolean isAllowOsAccess() {
+    return allowOsAccess;
+  }
+
   /** The value of the p:locale system property. */
   public XProcConfiguration setLocale(String locale) {
     this.locale = locale;
@@ -112,6 +127,7 @@ public final class XProcConfiguration {
     c.staticOptions.putAll(staticOptions);
     c.allowFileAccess = allowFileAccess;
     c.allowNetworkAccess = allowNetworkAccess;
+    c.allowOsAccess = allowOsAccess;
     c.locale = locale;
     return c;
   }
