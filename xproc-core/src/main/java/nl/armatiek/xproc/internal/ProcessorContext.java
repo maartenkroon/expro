@@ -10,6 +10,7 @@ import java.util.Properties;
 import java.util.Set;
 import java.util.UUID;
 
+import net.sf.saxon.Configuration;
 import net.sf.saxon.expr.XPathContext;
 import net.sf.saxon.lib.Resource;
 import net.sf.saxon.lib.ResourceCollection;
@@ -72,8 +73,9 @@ public final class ProcessorContext {
 
   public ProcessorContext(XProcConfiguration config) {
     this.config = config;
+    // The most capable licensed edition on the classpath: EE, then PE, otherwise HE
     this.processor = config.getSaxonProcessor() != null ? config.getSaxonProcessor()
-        : new Processor(false);
+        : new Processor(Configuration.newLicensedConfiguration());
     this.xpath = new XPathEngine(processor);
     this.types = new TypeConverter(xpath);
     this.loader = new DocumentLoader(this);

@@ -15,10 +15,6 @@
 
   <dependencies>
     <dependency>
-      <groupId>net.sf.saxon</groupId>
-      <artifactId>Saxon-HE</artifactId>
-    </dependency>
-    <dependency>
       <groupId>nu.validator</groupId>
       <artifactId>htmlparser</artifactId>
     </dependency>
@@ -59,6 +55,42 @@
       <artifactId>junit-jupiter</artifactId>
     </dependency>
   </dependencies>
+
+  <profiles>
+    <profile>
+      <!-- Saxon Home Edition (HE), the default -->
+      <id>Saxon-HE</id>
+      <activation>
+        <activeByDefault>true</activeByDefault>
+      </activation>
+      <dependencies>
+        <dependency>
+          <groupId>net.sf.saxon</groupId>
+          <artifactId>Saxon-HE</artifactId>
+        </dependency>
+      </dependencies>
+    </profile>
+    <profile>
+      <!-- Saxon Professional Edition (PE), from the Saxonica repository -->
+      <id>Saxon-PE</id>
+      <dependencies>
+        <dependency>
+          <groupId>com.saxonica</groupId>
+          <artifactId>Saxon-PE</artifactId>
+        </dependency>
+      </dependencies>
+    </profile>
+    <profile>
+      <!-- Saxon Enterprise Edition (EE), from the Saxonica repository -->
+      <id>Saxon-EE</id>
+      <dependencies>
+        <dependency>
+          <groupId>com.saxonica</groupId>
+          <artifactId>Saxon-EE</artifactId>
+        </dependency>
+      </dependencies>
+    </profile>
+  </profiles>
 
   <build>
     <resources>

@@ -18,6 +18,15 @@
     <module>xproc-rest</module>
   </modules>
 
+  <repositories>
+    <!-- For Saxon-PE and Saxon-EE (see the Saxon-PE and Saxon-EE profiles of xproc-core) -->
+    <repository>
+      <id>repos-saxonica</id>
+      <name>Saxonica Repository</name>
+      <url>https://maven.saxonica.com/maven</url>
+    </repository>
+  </repositories>
+
   <properties>
     <maven.compiler.release>25</maven.compiler.release>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
@@ -38,6 +47,16 @@
       <dependency>
         <groupId>net.sf.saxon</groupId>
         <artifactId>Saxon-HE</artifactId>
+        <version>${saxon.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.saxonica</groupId>
+        <artifactId>Saxon-PE</artifactId>
+        <version>${saxon.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.saxonica</groupId>
+        <artifactId>Saxon-EE</artifactId>
         <version>${saxon.version}</version>
       </dependency>
       <dependency>

@@ -31,6 +31,19 @@ This produces `xproc-core/target/xproc-core-1.0.0-SNAPSHOT.jar` and the executab
 `xproc-cli/target/xproc-cli-1.0.0-SNAPSHOT-all.jar` (which includes all dependencies) and the
 executable Spring Boot jar `xproc-rest/target/xproc-rest-1.0.0-SNAPSHOT.jar`.
 
+The Saxon edition is chosen with a Maven profile. `Saxon-HE` (Saxon-HE from Maven Central) is
+the default; `Saxon-PE` and `Saxon-EE` use Saxon-PE or Saxon-EE from the
+[Saxonica repository](https://maven.saxonica.com/maven), which the build already lists:
+
+```bash
+./mvnw clean install -P Saxon-EE
+```
+
+The processor creates its Saxon `Processor` from `Configuration.newLicensedConfiguration()`,
+which selects the most capable edition that is both on the classpath and licensed (EE, then
+PE, otherwise HE). Without a Saxonica license, PE and EE therefore run with HE features. A
+`Processor` passed to `XProcConfiguration.setSaxonProcessor()` is used as it is.
+
 ## Command line usage
 
 ```bash
