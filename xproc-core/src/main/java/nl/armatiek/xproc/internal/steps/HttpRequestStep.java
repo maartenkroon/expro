@@ -31,9 +31,9 @@ import javax.net.ssl.SSLContext;
 import javax.net.ssl.TrustManager;
 import javax.net.ssl.X509TrustManager;
 
+import net.sf.saxon.s9api.ItemType;
 import net.sf.saxon.s9api.QName;
 import net.sf.saxon.s9api.XdmAtomicValue;
-import net.sf.saxon.s9api.XdmItem;
 import net.sf.saxon.s9api.XdmMap;
 import net.sf.saxon.s9api.XdmValue;
 import nl.armatiek.xproc.MediaType;
@@ -52,6 +52,32 @@ final class HttpRequestStep implements StepImplementation {
       "PATCH", "OPTIONS", "TRACE");
   private static final List<String> BODY_METHODS = List.of("POST", "PUT", "PATCH");
 
+  private enum Type {
+    STRING, BOOLEAN, INTEGER
+  }
+
+  /** The required types of the standard keys of the parameters option. */
+  private static final Map<String, Type> PARAMETER_TYPES = Map.ofEntries(
+      Map.entry("http-version", Type.STRING),
+      Map.entry("override-content-type", Type.STRING),
+      Map.entry("override-content-encoding", Type.STRING),
+      Map.entry("accept-multipart", Type.BOOLEAN),
+      Map.entry("permit-expired-ssl-certificate", Type.BOOLEAN),
+      Map.entry("permit-untrusted-ssl-certificate", Type.BOOLEAN),
+      Map.entry("follow-redirect", Type.INTEGER),
+      Map.entry("timeout", Type.INTEGER),
+      Map.entry("fail-on-timeout", Type.BOOLEAN),
+      Map.entry("status-only", Type.BOOLEAN),
+      Map.entry("suppress-cookies", Type.BOOLEAN),
+      Map.entry("send-body-anyway", Type.BOOLEAN));
+
+  /** The required types of the standard keys of the auth option. */
+  private static final Map<String, Type> AUTH_TYPES = Map.of(
+      "username", Type.STRING,
+      "password", Type.STRING,
+      "auth-method", Type.STRING,
+      "send-authorization", Type.BOOLEAN);
+
   private StepContext ctx;
   private Map<QName, XdmValue> params;
 
@@ -59,6 +85,17 @@ final class HttpRequestStep implements StepImplementation {
   public void run(StepContext ctx) {
     this.ctx = ctx;
     params = Executor.toQNameMap(ctx.option("parameters"), ctx.optionNamespaces("parameters"));
+    for (Map.Entry<QName, XdmValue> e : params.entrySet()) {
+      Type type = e.getKey().getNamespace().isEmpty()
+          ? PARAMETER_TYPES.get(e.getKey().getLocalName()) : null;
+      if (type != null && !hasType(e.getValue(), type)) {
+        throw XProcException.xc(124, "The value of parameter " + e.getKey().getLocalName()
+            + " must be a single " + type.name().toLowerCase(Locale.ROOT));
+      }
+    }
+    if (intParam("timeout", 0) < 0) {
+      throw XProcException.xc(124, "The timeout parameter must not be negative");
+    }
     URI href = URI.create(Xdm.string(ctx.option("href")));
     if (!href.isAbsolute() && ctx.baseUri() != null) {
       href = ctx.baseUri().resolve(href);
@@ -93,6 +130,10 @@ final class HttpRequestStep implements StepImplementation {
         }
         headers.put(name, e.getValue().itemAt(0).getStringValue());
       }
+      String ctKey = findHeader(headers, "content-type");
+      if (ctKey != null && MediaType.tryParse(headers.get(ctKey)) == null) {
+        throw XProcException.xd(79, "Invalid content-type header: " + headers.get(ctKey));
+      }
     }
     List<XProcDocument> sources = ctx.inputs("source");
     if (sources.size() == 1) {
@@ -108,7 +149,13 @@ final class HttpRequestStep implements StepImplementation {
     XdmValue av = ctx.option("auth");
     if (av.size() > 0) {
       for (Map.Entry<XdmAtomicValue, XdmValue> e : ((XdmMap) av.itemAt(0)).entrySet()) {
-        auth.put(e.getKey().getStringValue(), e.getValue());
+        String key = e.getKey().getStringValue();
+        Type type = AUTH_TYPES.get(key);
+        if (type != null && !hasType(e.getValue(), type)) {
+          throw XProcException.xc(123, "The value of auth key " + key + " must be a single "
+              + type.name().toLowerCase(Locale.ROOT));
+        }
+        auth.put(key, e.getValue());
       }
       String existing = findHeader(headers, "authorization");
       if (existing != null) {
@@ -124,12 +171,6 @@ final class HttpRequestStep implements StepImplementation {
         && !authMethod.equalsIgnoreCase("digest")) {
       throw XProcException.xc(3, "Unsupported authentication method: " + authMethod);
     }
-    for (String k : List.of("username", "password", "auth-method")) {
-      if (auth.containsKey(k) && (auth.get(k).size() != 1 || !(auth.get(k).itemAt(0)
-          instanceof XdmAtomicValue))) {
-        throw XProcException.xc(123, "Invalid value for auth key " + k);
-      }
-    }
     // body
     byte[] body = null;
     boolean sendBody = BODY_METHODS.contains(method) || boolParam("send-body-anyway");
@@ -138,11 +179,8 @@ final class HttpRequestStep implements StepImplementation {
     }
     // client
     long timeout = intParam("timeout", -1);
-    if (timeout < -1) {
-      throw XProcException.xc(124, "timeout must be a non-negative integer");
-    }
     long followRedirect = intParam("follow-redirect", -1);
-    HttpClient client = buildClient();
+    HttpClient client = buildClient(scheme);
 
     String username = Xdm.string(auth.get("username"));
     String password = Xdm.string(auth.get("password"));
@@ -235,7 +273,14 @@ final class HttpRequestStep implements StepImplementation {
     }
     ctx.output("report", XProcDocument.of(ctx.processor(), reportMap, MediaType.JSON,
         (URI) null));
-    if (resp == null || boolParam("status-only")) {
+    if (resp == null) {
+      return;
+    }
+    if (boolParam("status-only")) {
+      String ct = resp.headers().firstValue("Content-Type").orElse("");
+      if (ct.toLowerCase(Locale.ROOT).startsWith("multipart/") && rejectMultipart()) {
+        throw XProcException.xc(125, "Multipart response received");
+      }
       return;
     }
     byte[] data = resp.body();
@@ -255,7 +300,7 @@ final class HttpRequestStep implements StepImplementation {
         : ctHeader == null ? "application/octet-stream" : ctHeader);
     URI base = resp.uri();
     if (ct.getType().equals("multipart")) {
-      if (params.containsKey(new QName("accept-multipart")) && !boolParam("accept-multipart")) {
+      if (rejectMultipart()) {
         throw XProcException.xc(125, "Multipart response received");
       }
       for (XProcDocument d : parseMultipart(data, ct, base)) {
@@ -266,7 +311,10 @@ final class HttpRequestStep implements StepImplementation {
     try {
       MediaType reported = ctHeader == null ? null : MediaType.tryParse(ctHeader);
       var charset = ct.getCharset(reported == null ? null : reported.getCharset(null));
-      ctx.output("result", ctx.pc().loader.parse(data, ct, charset, base, null,
+      // The charset only describes the encoding of the response body; once the body has been
+      // parsed into an XML, HTML or JSON document it no longer applies
+      MediaType docType = ct.isMarkup() || ct.isJson() ? withoutCharset(ct) : ct;
+      ctx.output("result", ctx.pc().loader.parse(data, docType, charset, base, null,
           Map.of(Ns.BASE_URI, new XdmAtomicValue(base)), true));
     } catch (XProcException e) {
       if (override != null) {
@@ -310,13 +358,7 @@ final class HttpRequestStep implements StepImplementation {
     if (!multipart) {
       XProcDocument d = sources.get(0);
       if (ctKey == null) {
-        MediaType dct = d.getContentType();
-        Map<QName, XdmValue> merged = DocumentSerializer.merge(ser, d);
-        XdmValue enc = merged.get(new QName("encoding"));
-        if (enc != null && !d.isBinary() && dct.getCharset() == null) {
-          dct = dct.withParameter("charset", enc.itemAt(0).getStringValue());
-        }
-        headers.put("Content-Type", dct.toString());
+        headers.put("Content-Type", contentTypeOf(d, ser).toString());
       }
       return ctx.pc().serializer.serializeToBytes(d, ser);
     }
@@ -339,7 +381,7 @@ final class HttpRequestStep implements StepImplementation {
       for (XProcDocument d : sources) {
         bos.write(("--" + boundary + "\r\n").getBytes(StandardCharsets.US_ASCII));
         Map<String, String> partHeaders = new LinkedHashMap<>();
-        partHeaders.put("Content-Type", d.getContentType().toString());
+        partHeaders.put("Content-Type", contentTypeOf(d, ser).toString());
         for (Map.Entry<QName, XdmValue> e : d.getProperties().entrySet()) {
           if (HTTP_NS.equals(e.getKey().getNamespace())) {
             String existing = findHeader(partHeaders, e.getKey().getLocalName());
@@ -364,7 +406,33 @@ final class HttpRequestStep implements StepImplementation {
     return bos.toByteArray();
   }
 
-  private HttpClient buildClient() {
+  /**
+   * The content type to send a document with: its own content type, with the charset of its
+   * serialization encoding for non-binary documents.
+   */
+  private static MediaType contentTypeOf(XProcDocument d, Map<QName, XdmValue> ser) {
+    MediaType ct = d.getContentType();
+    XdmValue enc = DocumentSerializer.merge(ser, d).get(new QName("encoding"));
+    if (enc != null && !d.isBinary() && ct.getCharset() == null) {
+      ct = ct.withParameter("charset", enc.itemAt(0).getStringValue());
+    }
+    return ct;
+  }
+
+  private static MediaType withoutCharset(MediaType ct) {
+    if (ct.getCharset() == null) {
+      return ct;
+    }
+    MediaType result = ct.withoutParameters();
+    for (Map.Entry<String, String> p : ct.getParameters().entrySet()) {
+      if (!p.getKey().equalsIgnoreCase("charset")) {
+        result = result.withParameter(p.getKey(), p.getValue());
+      }
+    }
+    return result;
+  }
+
+  private HttpClient buildClient(String scheme) {
     HttpClient.Builder b = HttpClient.newBuilder().followRedirects(HttpClient.Redirect.NEVER)
         .connectTimeout(Duration.ofSeconds(60));
     if (!boolParam("suppress-cookies")) {
@@ -374,6 +442,9 @@ final class HttpRequestStep implements StepImplementation {
     if (version != null) {
       b.version(version.startsWith("2") ? HttpClient.Version.HTTP_2
           : HttpClient.Version.HTTP_1_1);
+    } else if ("http".equals(scheme)) {
+      // Plain HTTP/2 (h2c) would add upgrade headers to every request
+      b.version(HttpClient.Version.HTTP_1_1);
     }
     if (boolParam("permit-untrusted-ssl-certificate")
         || boolParam("permit-expired-ssl-certificate")) {
@@ -422,8 +493,14 @@ final class HttpRequestStep implements StepImplementation {
         throw XProcException.xd(30, "Invalid header " + e.getKey() + ": " + ex.getMessage());
       }
     }
-    rb.method(method, body == null ? HttpRequest.BodyPublishers.noBody()
-        : HttpRequest.BodyPublishers.ofByteArray(body));
+    if (body == null && method.equals("GET")) {
+      rb.GET();
+    } else if (body == null && method.equals("DELETE")) {
+      rb.DELETE();
+    } else {
+      rb.method(method, body == null ? HttpRequest.BodyPublishers.noBody()
+          : HttpRequest.BodyPublishers.ofByteArray(body));
+    }
     try {
       return client.send(rb.build(), HttpResponse.BodyHandlers.ofByteArray());
     } catch (HttpTimeoutException e) {
@@ -606,13 +683,36 @@ final class HttpRequestStep implements StepImplementation {
     if (v == null || v.size() == 0) {
       return false;
     }
-    XdmItem i = v.itemAt(0);
-    if (i instanceof XdmAtomicValue av
-        && !(av.getUnderlyingValue() instanceof net.sf.saxon.value.BooleanValue)
-        && !(av.getUnderlyingValue() instanceof net.sf.saxon.value.StringValue)) {
-      throw XProcException.xc(124, "Parameter " + name + " must be a boolean");
-    }
     return Xdm.bool(v);
+  }
+
+  private boolean rejectMultipart() {
+    return params.containsKey(new QName("accept-multipart")) && !boolParam("accept-multipart");
+  }
+
+  /**
+   * True if the value is a single atomic value of the type. Untyped atomic values are accepted
+   * when they can be cast to the type.
+   */
+  private static boolean hasType(XdmValue value, Type type) {
+    if (value.size() != 1 || !(value.itemAt(0) instanceof XdmAtomicValue av)) {
+      return false;
+    }
+    if (av.getUnderlyingValue() instanceof net.sf.saxon.value.StringValue sv
+        && sv.getItemType() == net.sf.saxon.type.BuiltInAtomicType.UNTYPED_ATOMIC) {
+      String s = av.getStringValue().trim();
+      return switch (type) {
+        case STRING -> true;
+        case BOOLEAN -> List.of("true", "false", "1", "0").contains(s);
+        case INTEGER -> s.matches("[+-]?[0-9]+");
+      };
+    }
+    ItemType required = switch (type) {
+      case STRING -> ItemType.STRING;
+      case BOOLEAN -> ItemType.BOOLEAN;
+      case INTEGER -> ItemType.INTEGER;
+    };
+    return required.matches(av);
   }
 
   private long intParam(String name, long dflt) {

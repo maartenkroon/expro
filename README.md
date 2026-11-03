@@ -178,16 +178,19 @@ PSVI support, XQuery function imports, and the DTD compatibility attribute defau
 `p:validate-with-relax-ng` (`dtd-attribute-values`) are not implemented.
 
 The processor has been tested against the
-[XProc test suite](https://codeberg.org/XProc/test-suite). Of the 2959 tests that apply to
-this processor, 2929 pass (99.0%). Every test of the file, operating system, `p:run`,
-validation and text steps that applies passes. The suite's other 404 tests were skipped
+[XProc test suite](https://codeberg.org/XProc/test-suite), with the suite's Docker-based HTTP
+test server running. Of the 3086 tests that apply to this processor, 3055 pass (99.0%). Every
+test of the file, operating system, `p:run`, validation and text steps that applies passes,
+and 126 of the 127 `p:http-request` tests pass. The suite's other 277 tests were skipped
 because they need optional features, a Windows host (`p:urify` Windows behaviour), XProc 3.2,
-or the suite's Docker-based HTTP and mail test servers. `p:http-request` and `p:send-mail` are
-covered by this project's own tests against an in-process HTTP and SMTP server instead.
+internet access, or the suite's mail test server. `p:send-mail` is covered by this project's
+own tests against an in-process SMTP server instead.
 
-Most of the 30 failing tests are cases where a test expects a different error code from the
-one the specification names. In those cases this implementation follows the specification:
+Most of the 31 failing tests are cases where a test expects something other than what the
+specification says. In those cases this implementation follows the specification:
 
+* `p:http-request` with the `status-only` parameter returns an empty map of headers on the
+  `report` port, as the specification requires (the test expects the response headers).
 * `err:XS0094` (not `XS0038`) for a `p:variable` without `select`.
 * `err:XS0088` (not `XS0091`) for a variable that shadows a static option.
 * `err:XS0027` (not `XS0080`) for an option given both as an attribute and with
@@ -207,6 +210,12 @@ git clone https://codeberg.org/XProc/test-suite.git
 The report is written to `xproc-core/target/testsuite-report.txt`. The runner sets up the
 `t:file-environment` of the file step tests in the suite's `testfolder` directory. On
 Unix-like systems it creates files marked as hidden with a name that starts with a dot.
+
+The `p:http-request` tests of the suite need its HTTP test server on `localhost:8246`. The
+runner checks whether that port is reachable: if it is, these tests run; if not, they are
+skipped and the report says the server is not reachable. To run them, install Docker and start
+the server from the test suite checkout (`docker compose up -d` in its `docker` directory, or
+`./gradlew start`) before you run the suite.
 
 ## Implementation-defined features
 

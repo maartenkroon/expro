@@ -1,7 +1,10 @@
 package nl.armatiek.xproc.testsuite;
 
 import java.io.File;
+import java.io.IOException;
 import java.io.PrintStream;
+import java.net.InetSocketAddress;
+import java.net.Socket;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -75,6 +78,13 @@ public final class TestSuiteRunner {
       "p-validate-with-json-schema", "p-validate-with-dtd", "p-run", "dtd-id-ref-warning",
       "markdown-to-html");
 
+  /** The HTTP server used by the p:http-request tests (the test suite's Docker container). */
+  private static final String HTTP_HOST = "localhost";
+  private static final int HTTP_PORT = 8246;
+
+  /** True if the HTTP test server is reachable, so the p:http-request tests can run. */
+  private static final boolean HTTP_SERVER = reachable(HTTP_HOST, HTTP_PORT);
+
   enum Outcome {
     PASS, FAIL, SKIP
   }
@@ -142,12 +152,22 @@ public final class TestSuiteRunner {
         report.println(r.outcome() + " " + r.name() + ": " + r.detail());
       }
     }
-    String summary = String.format("Total %d, passed %d, failed %d, skipped (optional "
-        + "features) %d", results.size(), pass, fail, skip);
+    String summary = String.format("Total %d, passed %d, failed %d, skipped %d (HTTP test "
+        + "server %s)", results.size(), pass, fail, skip, HTTP_SERVER ? "reachable"
+        : "not reachable");
     report.println(summary);
     if (report != System.out) {
       report.close();
       System.out.println(summary);
+    }
+  }
+
+  private static boolean reachable(String host, int port) {
+    try (Socket socket = new Socket()) {
+      socket.connect(new InetSocketAddress(host, port), 1000);
+      return true;
+    } catch (IOException e) {
+      return false;
     }
   }
 
@@ -170,7 +190,12 @@ public final class TestSuiteRunner {
       String features = test.getAttributeValue(new QName("features"));
       if (features != null) {
         for (String f : features.trim().split("\\s+")) {
-          if (!FEATURES.contains(f)) {
+          if (f.equals("p:http-request")) {
+            if (!HTTP_SERVER) {
+              return new Result(name, Outcome.SKIP, "needs the test suite's HTTP server on "
+                  + HTTP_HOST + ":" + HTTP_PORT + ", which is not reachable");
+            }
+          } else if (!FEATURES.contains(f)) {
             return new Result(name, Outcome.SKIP, "requires optional feature " + f);
           }
         }
