@@ -23,6 +23,7 @@ public class XProcException extends RuntimeException {
   private int column = -1;
   private String stepName;
   private QName stepType;
+  private boolean callerError;
   private final List<XdmNode> details = new ArrayList<>();
 
   public XProcException(QName code, String message) {
@@ -120,6 +121,20 @@ public class XProcException extends RuntimeException {
       this.stepName = name;
       this.stepType = type;
     }
+    return this;
+  }
+
+  /**
+   * True if the error is caused by what the caller of a pipeline supplied rather than by the
+   * pipeline: an option value that does not match the declared type or values of the option, a
+   * missing required option, or an option or input port the pipeline does not declare.
+   */
+  public boolean isCallerError() {
+    return callerError;
+  }
+
+  public XProcException setCallerError(boolean callerError) {
+    this.callerError = callerError;
     return this;
   }
 

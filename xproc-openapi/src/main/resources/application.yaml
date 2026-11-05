@@ -1,0 +1,29 @@
+spring:
+  application:
+    name: xproc-openapi
+  servlet:
+    multipart:
+      max-file-size: 50MB
+      max-request-size: 100MB
+xproc:
+  openapi:
+    # The directory with the OpenAPI description (openapi.yaml, openapi.yml or openapi.json)
+    # and the pipelines (<operationId>.xpl). Override with --xproc.openapi.config-dir=...
+    config-dir: ./config
+    # Load the description and pipelines again when their files change
+    check-modified: true
+    # Maximum size in bytes of a request body that is not multipart (10 MB)
+    max-request-size: 10485760
+    # The pipelines are part of the configuration, so they may read local files (for example
+    # the stylesheets next to them) and access the network; running commands is not allowed
+    allow-file-access: true
+    allow-network-access: true
+    allow-os-access: false
+    # Maximum number of compiled XSLT stylesheets kept for reuse
+    xslt-cache-size: 100
+management:
+  endpoints:
+    web:
+      exposure:
+        # xproccaches: GET reports the caches, DELETE clears them
+        include: health,info,xproccaches

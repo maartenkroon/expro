@@ -195,13 +195,17 @@ final class TransformSteps {
         compileErrors.add(err.getMessage());
       }
     });
-    XsltExecutable exec;
-    try {
-      exec = compiler.compile(stylesheet.getNode().asSource());
-    } catch (SaxonApiException e) {
-      throw XProcException.xc(93, "Static error in XSLT stylesheet: " + (compileErrors.isEmpty()
-          ? e.getMessage() : String.join("; ", compileErrors)), e).setCauseCode(e.getErrorCode());
-    }
+    Map<QName, XdmValue> compileParams = version >= 3.0 ? staticParams : Map.of();
+    XsltExecutable exec = ctx.pc().xsltCache.get(ctx.processor(), "xslt", stylesheet.getNode(),
+        compileParams, () -> {
+          try {
+            return compiler.compile(stylesheet.getNode().asSource());
+          } catch (SaxonApiException e) {
+            throw XProcException.xc(93, "Static error in XSLT stylesheet: "
+                + (compileErrors.isEmpty() ? e.getMessage() : String.join("; ", compileErrors)),
+                e).setCauseCode(e.getErrorCode());
+          }
+        });
     Xslt30Transformer t = exec.load30();
     t.setMessageHandler(m -> ctx.messages().message(MessageListener.Level.INFO, ctx.stepName(),
         m.getStringValue()));

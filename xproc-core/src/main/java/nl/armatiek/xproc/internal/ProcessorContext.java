@@ -68,6 +68,7 @@ public final class ProcessorContext {
   public final Urify urify = new Urify();
   public final String episode;
   public final StepRegistry steps;
+  public final XsltCache xsltCache;
   /** Declarations of the standard steps (from the step library). */
   public final Map<QName, StepDeclaration> standardSteps = new LinkedHashMap<>();
 
@@ -82,6 +83,7 @@ public final class ProcessorContext {
     this.serializer = new DocumentSerializer(processor);
     this.episode = "E" + UUID.randomUUID().toString().replace("-", "");
     this.steps = new StepRegistry();
+    this.xsltCache = new XsltCache(config.getXsltCacheSize());
     XProcFunctions.register(this);
     installCollectionFinder();
   }

@@ -62,6 +62,19 @@ public final class XProcProcessor {
     return ProcessorContext.PRODUCT_VERSION;
   }
 
+  /**
+   * Discards the compiled XSLT stylesheets kept for reuse. Use this when stylesheets included or
+   * imported by cached stylesheets have changed; changes to a stylesheet itself are noticed.
+   */
+  public void clearCaches() {
+    pc.xsltCache.clear();
+  }
+
+  /** The number of compiled XSLT stylesheets currently kept for reuse. */
+  public int getCachedStylesheetCount() {
+    return pc.xsltCache.size();
+  }
+
   /** Compiles the pipeline at the given URI. */
   public XProcPipeline compile(URI uri) {
     return compile(uri, Map.of());

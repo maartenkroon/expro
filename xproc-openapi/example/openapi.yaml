@@ -1,0 +1,101 @@
+openapi: 3.1.0
+info:
+  title: Example XProc service
+  version: 1.0.0
+  description: >
+    Each operation is implemented by the XProc pipeline <operationId>.xpl in this directory.
+servers:
+  - url: /api/v1
+paths:
+  /greetings/{name}:
+    get:
+      operationId: getGreeting
+      summary: Greets someone in the requested language
+      parameters:
+        - name: name
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: lang
+          in: query
+          schema:
+            type: string
+            enum: [en, nl]
+            default: en
+        - name: repeat
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: X-Request-Id
+          in: header
+          schema:
+            type: string
+      responses:
+        "200":
+          description: The greeting
+          content:
+            application/xml: {}
+  /transform:
+    post:
+      operationId: transformDocument
+      summary: Transforms an XML document with transform.xsl
+      requestBody:
+        required: true
+        content:
+          application/xml: {}
+      responses:
+        "200":
+          description: The transformed document
+          content:
+            application/xml: {}
+  /uploads:
+    post:
+      operationId: uploadDocuments
+      summary: Describes the uploaded files
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                document:
+                  type: string
+                  format: binary
+                comment:
+                  type: string
+      responses:
+        "201":
+          description: A description of the uploaded files
+          content:
+            application/json: {}
+  /echo:
+    get:
+      operationId: echoRequest
+      summary: Returns the request as the pipeline sees it
+      parameters:
+        - name: tags
+          in: query
+          schema:
+            type: array
+            items:
+              type: string
+        - name: session
+          in: cookie
+          schema:
+            type: string
+      responses:
+        "200":
+          description: The request
+          content:
+            application/json: {}
+  /fail:
+    get:
+      operationId: failAlways
+      summary: Raises an error, reported as an RFC 9457 problem
+      responses:
+        default:
+          description: A problem
+          content:
+            application/problem+xml: {}

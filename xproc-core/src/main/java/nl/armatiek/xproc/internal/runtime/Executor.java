@@ -83,7 +83,8 @@ public final class Executor {
     }
     for (String name : inputs.keySet()) {
       if (!decl.inputs.containsKey(name)) {
-        throw XProcException.xs(114, "The pipeline has no input port named '" + name + "'");
+        throw XProcException.xs(114, "The pipeline has no input port named '" + name + "'")
+            .setCallerError(true);
       }
     }
     Map<OptionDecl, BoundValue> opts = new LinkedHashMap<>();
@@ -93,14 +94,19 @@ public final class Executor {
       if (od.isStatic) {
         bv = new BoundValue(od.staticValue, od.staticNamespaces);
       } else if (options.containsKey(od.name)) {
-        XdmValue v = pc.types.convert(options.get(od.name), od.asText,
-            od.context == null ? Map.of() : od.context.prefixedNamespaces(),
-            od.context == null ? null : od.context.baseUri);
-        checkValues(od, v);
+        XdmValue v;
+        try {
+          v = pc.types.convert(options.get(od.name), od.asText,
+              od.context == null ? Map.of() : od.context.prefixedNamespaces(),
+              od.context == null ? null : od.context.baseUri);
+          checkValues(od, v);
+        } catch (XProcException e) {
+          throw e.setCallerError(true);
+        }
         bv = new BoundValue(v, od.context == null ? Map.of() : od.context.prefixedNamespaces());
       } else if (od.required) {
         throw XProcException.xs(18, "No value specified for required option '"
-            + QNames.display(od.name) + "'");
+            + QNames.display(od.name) + "'").setCallerError(true);
       } else {
         bv = defaultOptionValue(od, optFrame);
       }
@@ -111,7 +117,7 @@ public final class Executor {
       OptionDecl od = decl.options.get(name);
       if (od == null) {
         throw XProcException.xs(31, "The pipeline has no option named '" + QNames.display(name)
-            + "'");
+            + "'").setCallerError(true);
       }
     }
     return invokePipeline(decl, in, opts);

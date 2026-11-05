@@ -16,6 +16,7 @@
     <module>xproc-core</module>
     <module>xproc-cli</module>
     <module>xproc-rest</module>
+    <module>xproc-openapi</module>
   </modules>
 
   <repositories>

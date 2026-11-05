@@ -18,6 +18,7 @@ The project consists of three Maven modules:
 | `xproc-core` | The processor as a library with a small public API (`nl.armatiek.xproc`) |
 | `xproc-cli`  | A command line interface, packaged as an executable "fat" jar            |
 | `xproc-rest` | A Spring Boot web application with an OpenAPI-defined REST interface     |
+| `xproc-openapi` | A Spring Boot web service whose OpenAPI operations are XProc pipelines |
 
 ## Building
 
@@ -29,7 +30,8 @@ Maven does not need to be installed; the Maven wrapper is included:
 
 This produces `xproc-core/target/xproc-core-1.0.0-SNAPSHOT.jar` and the executable
 `xproc-cli/target/xproc-cli-1.0.0-SNAPSHOT-all.jar` (which includes all dependencies) and the
-executable Spring Boot jar `xproc-rest/target/xproc-rest-1.0.0-SNAPSHOT.jar`.
+executable Spring Boot jars `xproc-rest/target/xproc-rest-1.0.0-SNAPSHOT.jar` and
+`xproc-openapi/target/xproc-openapi-1.0.0-SNAPSHOT.jar`.
 
 The Saxon edition is chosen with a Maven profile. `Saxon-HE` (Saxon-HE from Maven Central) is
 the default; `Saxon-PE` and `Saxon-EE` use Saxon-PE or Saxon-EE from the
@@ -94,9 +96,11 @@ for (XProcDocument doc : result.getPrimaryDocuments()) {
 The main types:
 
 * `XProcProcessor` – compiles pipelines (from a `File`, `URI`, `Source`, string or `XdmNode`),
-  loads, parses and serializes documents. Thread-safe.
+  loads, parses and serializes documents. Thread-safe. It keeps compiled XSLT stylesheets (of
+  `p:xslt` and of Schematron schemas) for reuse; `clearCaches()` discards them.
 * `XProcConfiguration` – message listener, URI mapper (also used by `p:lookup-uri()`), default
-  values for static options, file/network access, locale, and an optional existing Saxon
+  values for static options, file/network access, locale, the size of the XSLT cache
+  (`setXsltCacheSize`, default 100, 0 disables it), and an optional existing Saxon
   `Processor`.
 * `XProcPipeline` – a compiled pipeline; exposes its signature (`getInputs()`, `getOutputs()`,
   `getOptions()`) and the serialization parameters of its output ports. Immutable and safe to
@@ -104,6 +108,12 @@ The main types:
 * `XProcDocument` – a document (XML, HTML, text, JSON or binary) plus its document properties.
 * `XProcResult` – the documents on each output port.
 * `XProcException` – every error carries its XProc (or XPath) error code as a `QName`.
+  `isCallerError()` is true when the cause is what the caller supplied (an option value of the
+  wrong type, a missing required option), not the pipeline.
+
+A compiled stylesheet is identified by a digest of the stylesheet document, its base URI and
+its static parameters, so a changed stylesheet is compiled again. Modules it includes or imports
+are not part of the digest: call `clearCaches()` after changing them.
 
 ## REST service
 
@@ -171,6 +181,146 @@ environment variables and leaves the user and working directory attributes empty
 these settings on for a service that untrusted clients can reach. The service has no
 authentication of its own, so put it behind a gateway that adds authentication before you
 expose it.
+
+## OpenAPI pipeline service
+
+The `xproc-openapi` module is a Spring Boot 4 web service whose API is whatever an OpenAPI
+3.1 (or 3.0) description says it is, and whose operations are implemented by XProc pipelines.
+Both live in a configuration directory: the description (`openapi.yaml`, `openapi.yml` or
+`openapi.json`) and, for every operation, the pipeline `<operationId>.xpl`. The description is
+parsed with [Swagger Parser](https://github.com/swagger-api/swagger-parser), which also
+resolves `$ref` references, and is loaded when the service starts.
+
+```bash
+java -jar xproc-openapi/target/xproc-openapi-1.0.0-SNAPSHOT.jar \
+     --xproc.openapi.config-dir=xproc-openapi/example
+curl 'http://localhost:8080/api/v1/greetings/Ann?lang=nl'
+```
+
+[`xproc-openapi/example`](xproc-openapi/example) is a small example service: parameters,
+a request body transformed with a (cached) XSLT stylesheet, a multipart upload, the request
+information, and an error.
+
+### Requests
+
+The API paths are served under the path of the first server URL of the description (for
+example `/api/v1`), or under `xproc.openapi.base-path`. A request is matched against the path
+templates, most specific first; no match gives 404 and a path without the request method 405
+(with an `Allow` header). An operation without an `operationId` or without a pipeline file gives
+501. Everything the request carries is passed to the pipeline:
+
+| From the request | To the pipeline |
+|------------------|-----------------|
+| Path, query, header and cookie parameters of the operation | Options named after the parameter, in the namespace of its location (below) |
+| The request body | The document on the input port `source`, parsed according to its `Content-Type` |
+| Files of a `multipart/form-data` request | Documents on the input port named after the part, or else after the file name; several files of one part form a sequence |
+| Other parts of a `multipart/form-data` request | Options named after the part, in the part namespace |
+| Method, URI, path, headers, ... | Options in the request namespace (below) |
+
+| Namespace | Options |
+|-----------|---------|
+| `http://www.armatiek.nl/ns/xproc/openapi/parameter/path` | path parameters |
+| `http://www.armatiek.nl/ns/xproc/openapi/parameter/query` | query parameters |
+| `http://www.armatiek.nl/ns/xproc/openapi/parameter/header` | header parameters |
+| `http://www.armatiek.nl/ns/xproc/openapi/parameter/cookie` | cookie parameters |
+| `http://www.armatiek.nl/ns/xproc/openapi/multipart/part` | non-file parts of a multipart request |
+| `http://www.armatiek.nl/ns/xproc/openapi/request` | `method`, `uri`, `path`, `base-path`, `path-template`, `operation-id`, `query-string`, `scheme`, `server-name`, `server-port`, `remote-address`, `remote-user`, `content-type`, and the maps `headers` (lower-case names), `query`, `cookies` and `path-parameters`, each `map(xs:string, xs:string*)` |
+
+For example:
+
+```xml
+<p:declare-step xmlns:p="http://www.w3.org/ns/xproc"
+                xmlns:xs="http://www.w3.org/2001/XMLSchema"
+                xmlns:path="http://www.armatiek.nl/ns/xproc/openapi/parameter/path"
+                xmlns:query="http://www.armatiek.nl/ns/xproc/openapi/parameter/query"
+                version="3.1">
+  <p:output port="result"/>
+  <p:option name="path:name" as="xs:string" required="true"/>
+  <p:option name="query:repeat" as="xs:integer" select="1"/>
+  ...
+</p:declare-step>
+```
+
+Only the options and input ports that the pipeline declares are passed. Values are passed as
+`xs:untypedAtomic`, so they are converted to the type the pipeline declares (`as`). A
+parameter whose schema is an array gives a sequence: repeated query parameters, or the items
+of a comma (`simple`, `form` with `explode: false`), space (`spaceDelimited`) or pipe
+(`pipeDelimited`) separated value. A missing parameter gets the `default` of its schema;
+a missing required parameter gives 400, and so does a value that does not match the type of
+its option, or a request body that cannot be parsed. Body parsing and the pipeline run
+happen for every method that carries a body, not only POST.
+
+### Responses
+
+The document on the primary output port is the response body, serialized with the
+serialization parameters of the port and the document. The `Content-Type` is the
+`media-type` serialization parameter, or follows from the `method` parameter, or else is the
+content type of the document. No document gives 204 No Content; more than one gives 500. The
+pipeline can set the status and headers through the document properties `resp:status` (an
+integer) and `resp:headers` (a map of header names to values) of the result, in the namespace
+`http://www.armatiek.nl/ns/xproc/openapi/response`:
+
+```xml
+<p:set-properties properties="map{
+    QName('http://www.armatiek.nl/ns/xproc/openapi/response', 'status'): 201}"/>
+```
+
+### Errors
+
+Errors, including errors the pipeline does not handle, are returned as
+[RFC 9457](https://www.rfc-editor.org/info/rfc9457/) problem details: `type` (`about:blank`),
+`title`, `status`, `detail` and `instance`, plus for XProc errors the members `code`,
+`causeCode`, `step`, `stepType`, `location`, `line`, `column` and `details` (the documents
+passed to `p:error`). Unhandled pipeline errors give 500.
+
+The format follows the serialization method of the primary output port of the pipeline: `json`
+gives `application/problem+json`, and `xml`, `xhtml` and `html` give `application/problem+xml`
+(namespace `urn:ietf:rfc:7807`). If the method is not specified, the format follows the
+content type the result would have had, as in
+[XProc's rules for choosing a method](https://spec.xproc.org/3.1/xproc/#serialization-method):
+the content types declared on the primary output port (`content-types`), then the content
+types of the responses of the operation in the description. Without either (and for errors
+before an operation is known), an `Accept` header that asks for XML and not JSON gives XML;
+otherwise the problem is JSON.
+
+### Caching and concurrency
+
+The description, the compiled pipelines and the compiled XSLT stylesheets are cached and
+shared by all requests: one `XProcProcessor` runs all pipelines, and compiled pipelines and
+stylesheets are immutable. A pipeline is compiled on first use. With
+`xproc.openapi.check-modified` (the default), a changed description or pipeline file is loaded
+again on the next request. Files that a pipeline imports or reads (other pipelines,
+stylesheets included by a stylesheet) are not watched.
+
+The actuator endpoint `/actuator/xproccaches` reports the caches (`GET`) and clears them
+(`DELETE`): the description is loaded again, and pipelines and stylesheets are compiled again
+on their next use. No restart is needed:
+
+```bash
+curl -X DELETE http://localhost:8080/actuator/xproccaches
+```
+
+### Configuration
+
+| Property | Default | Meaning |
+|----------|---------|---------|
+| `xproc.openapi.config-dir` | `./config` | The directory with the description and the pipelines |
+| `xproc.openapi.description` | | The description file name (default: `openapi.yaml`, `openapi.yml` or `openapi.json`) |
+| `xproc.openapi.base-path` | | The path under which the API is served (default: the path of the first server URL) |
+| `xproc.openapi.check-modified` | `true` | Load changed description and pipeline files again |
+| `xproc.openapi.max-request-size` | `10485760` | The maximum size in bytes of a request body that is not multipart |
+| `xproc.openapi.allow-file-access` | `true` | Allow pipelines to read and write `file:` URIs |
+| `xproc.openapi.allow-network-access` | `true` | Allow pipelines to access the network |
+| `xproc.openapi.allow-os-access` | `false` | Allow `p:os-exec` and the details of `p:os-info` |
+| `xproc.openapi.xslt-cache-size` | `100` | The maximum number of compiled stylesheets kept |
+
+The limits for multipart requests are Spring Boot's `spring.servlet.multipart.*` properties
+(50 MB per file and 100 MB per request by default here). Unlike in `xproc-rest`, the pipelines
+are part of the configuration rather than supplied by clients, so file and network access are
+on by default. The service has no authentication of its own: put it behind a gateway that adds
+it, and keep the actuator endpoints away from clients (for example with
+`management.server.port`), since anyone who can reach `/actuator/xproccaches` can clear the
+caches.
 
 ## Conformance
 
@@ -388,6 +538,10 @@ xproc-rest/src/main/resources/static/openapi.yaml           REST interface speci
 xproc-rest/src/main/java/nl/armatiek/xproc/rest/
     controller/  implementations of the generated API interfaces, error handling
     service/     compiling, storing and running pipelines; document conversion
+xproc-openapi/src/main/java/nl/armatiek/xproc/openapi/
+    api/         loading the OpenAPI description, operations and parameters, path matching
+    web/         request to pipeline mapping, responses, RFC 9457 problem details
+xproc-openapi/example/                                      an example configuration directory
 ```
 
 `steps.xpl` contains the step declarations published as an ancillary file of the XProc 3.1

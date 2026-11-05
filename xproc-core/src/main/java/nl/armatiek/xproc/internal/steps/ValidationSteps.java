@@ -57,7 +57,6 @@ import net.sf.saxon.s9api.XdmMap;
 import net.sf.saxon.s9api.XdmNode;
 import net.sf.saxon.s9api.XdmNodeKind;
 import net.sf.saxon.s9api.XdmValue;
-import net.sf.saxon.s9api.XsltCompiler;
 import net.sf.saxon.s9api.XsltExecutable;
 import net.sf.saxon.s9api.Xslt30Transformer;
 import nl.armatiek.xproc.MediaType;
@@ -472,22 +471,24 @@ final class ValidationSteps {
         new XdmAtomicValue(Xdm.string(ctx.option("phase"))));
 
     Processor processor = ctx.processor();
-    XdmNode stylesheet;
-    XsltExecutable validator;
-    try {
-      Xslt30Transformer transpiler = transpiler(processor).load30();
-      transpiler.setStylesheetParameters(compile);
-      XdmDestination dest = new XdmDestination();
-      if (schemaDoc.getBaseURI() != null) {
-        dest.setBaseURI(schemaDoc.getBaseURI());
-      }
-      transpiler.applyTemplates(schemaDoc.getNode(), dest);
-      stylesheet = dest.getXdmNode();
-      XsltCompiler xc = processor.newXsltCompiler();
-      validator = xc.compile(stylesheet.asSource());
-    } catch (SaxonApiException e) {
-      throw XProcException.xc(151, "Cannot compile the Schematron schema: " + e.getMessage());
-    }
+    // The compiled stylesheet depends on the schema, its base URI and the transpiler parameters
+    XsltExecutable validator = ctx.pc().xsltCache.get(processor, "schematron",
+        schemaDoc.getNode(), compile, () -> {
+          try {
+            Xslt30Transformer transpiler = transpiler(processor).load30();
+            transpiler.setStylesheetParameters(compile);
+            XdmDestination dest = new XdmDestination();
+            if (schemaDoc.getBaseURI() != null) {
+              dest.setBaseURI(schemaDoc.getBaseURI());
+            }
+            transpiler.applyTemplates(schemaDoc.getNode(), dest);
+            XdmNode stylesheet = dest.getXdmNode();
+            return processor.newXsltCompiler().compile(stylesheet.asSource());
+          } catch (SaxonApiException e) {
+            throw XProcException.xc(151, "Cannot compile the Schematron schema: "
+                + e.getMessage());
+          }
+        });
     XdmNode svrl;
     try {
       Xslt30Transformer t = validator.load30();

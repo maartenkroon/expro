@@ -23,6 +23,7 @@ public final class XProcConfiguration {
   private boolean allowNetworkAccess = true;
   private boolean allowOsAccess = true;
   private String locale = java.util.Locale.getDefault().toLanguageTag();
+  private int xsltCacheSize = 100;
 
   public XProcConfiguration() {
   }
@@ -119,6 +120,23 @@ public final class XProcConfiguration {
     return locale;
   }
 
+  /**
+   * The maximum number of compiled XSLT stylesheets (of p:xslt and of Schematron schemas) the
+   * processor keeps for reuse; the least recently used are dropped first. 0 disables the cache.
+   * Default: 100.
+   */
+  public XProcConfiguration setXsltCacheSize(int size) {
+    if (size < 0) {
+      throw new IllegalArgumentException("The XSLT cache size cannot be negative");
+    }
+    this.xsltCacheSize = size;
+    return this;
+  }
+
+  public int getXsltCacheSize() {
+    return xsltCacheSize;
+  }
+
   XProcConfiguration copy() {
     XProcConfiguration c = new XProcConfiguration();
     c.saxonProcessor = saxonProcessor;
@@ -129,6 +147,7 @@ public final class XProcConfiguration {
     c.allowNetworkAccess = allowNetworkAccess;
     c.allowOsAccess = allowOsAccess;
     c.locale = locale;
+    c.xsltCacheSize = xsltCacheSize;
     return c;
   }
 }
