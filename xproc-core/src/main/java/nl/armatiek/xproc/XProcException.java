@@ -98,7 +98,7 @@ public class XProcException extends RuntimeException {
 
   /** Records the location in a pipeline document, unless a location is known already. */
   public XProcException at(String uri, int line, int column) {
-    if (location == null && line < 0) {
+    if (location == null && this.line < 0) {
       this.location = uri;
       this.line = line;
       this.column = column;

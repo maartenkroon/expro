@@ -93,7 +93,8 @@ public final class XProcProcessor {
     try {
       return compile(db.build(source), staticOptions);
     } catch (SaxonApiException e) {
-      throw XProcException.xs(100, "Cannot parse pipeline: " + e.getMessage());
+      throw XProcException.xs(100, "Cannot parse pipeline: " + e.getMessage())
+          .at(e.getSystemId(), e.getLineNumber(), -1);
     }
   }
 
