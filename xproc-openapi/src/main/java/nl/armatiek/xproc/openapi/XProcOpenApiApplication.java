@@ -41,6 +41,7 @@ public class XProcOpenApiApplication {
         .setAllowNetworkAccess(props.allowNetworkAccess())
         .setAllowOsAccess(props.allowOsAccess())
         .setXsltCacheSize(props.xsltCacheSize())
+        .setFopConfiguration(props.fopConfig() == null ? null : props.fopConfig().toUri())
         .setMessageListener(listener));
   }
 }

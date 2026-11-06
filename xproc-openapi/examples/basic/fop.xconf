@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  The Apache FOP configuration of p:xsl-formatter, used because it is in the configuration
+  directory (see xproc.openapi.fop-config). Relative URIs in it, such as those of fonts, are
+  relative to this directory. See https://xmlgraphics.apache.org/fop/2.12/configuration.html
+-->
+<fop version="1.0">
+  <renderers>
+    <renderer mime="application/pdf">
+      <version>1.7</version>
+      <!-- Embed the fonts of this directory (or of the system) with, for example:
+      <fonts>
+        <directory>fonts</directory>
+        <auto-detect/>
+      </fonts>
+      -->
+    </renderer>
+  </renderers>
+</fop>

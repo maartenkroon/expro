@@ -69,6 +69,7 @@ public final class ProcessorContext {
   public final String episode;
   public final StepRegistry steps;
   public final XsltCache xsltCache;
+  public final FopProvider fop = new FopProvider(this);
   /** Declarations of the standard steps (from the step library). */
   public final Map<QName, StepDeclaration> standardSteps = new LinkedHashMap<>();
 

@@ -44,12 +44,52 @@ paths:
       requestBody:
         required: true
         content:
-          application/xml: {}
+          application/xml:
+            # A schema gives Swagger UI an editor for the body ("Try it out")
+            schema:
+              type: string
+            examples:
+              document:
+                value: <doc><a/><b/></doc>
       responses:
         "200":
           description: The transformed document
           content:
             application/xml: {}
+  /format:
+    post:
+      operationId: formatDocument
+      summary: Renders an XSL-FO document as PDF with Apache FOP (configured by fop.xconf)
+      requestBody:
+        description: >
+          An XSL-FO document. Swagger UI cannot show XML examples without a schema of the XML,
+          so replace its placeholder with your document (or the example below).
+        required: true
+        content:
+          application/xml:
+            schema:
+              type: string
+            examples:
+              hello:
+                value: |
+                  <fo:root xmlns:fo="http://www.w3.org/1999/XSL/Format">
+                    <fo:layout-master-set>
+                      <fo:simple-page-master master-name="A4" page-height="297mm" page-width="210mm">
+                        <fo:region-body margin="20mm"/>
+                      </fo:simple-page-master>
+                    </fo:layout-master-set>
+                    <fo:page-sequence master-reference="A4">
+                      <fo:flow flow-name="xsl-region-body">
+                        <fo:block font-size="18pt" font-weight="bold">Hello from Expro</fo:block>
+                        <fo:block>This PDF was rendered by p:xsl-formatter with Apache FOP.</fo:block>
+                      </fo:flow>
+                    </fo:page-sequence>
+                  </fo:root>
+      responses:
+        "200":
+          description: The PDF document
+          content:
+            application/pdf: {}
   /uploads:
     post:
       operationId: uploadDocuments

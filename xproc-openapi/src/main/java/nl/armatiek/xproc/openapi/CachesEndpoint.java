@@ -15,7 +15,8 @@ import nl.armatiek.xproc.XProcProcessor;
 /**
  * Actuator endpoint for the caches of the service: {@code GET /actuator/xproccaches} reports
  * them, {@code DELETE /actuator/xproccaches} clears them: the OpenAPI description is loaded
- * again, and pipelines and XSLT stylesheets are compiled again on their next use.
+ * again, pipelines and XSLT stylesheets are compiled again on their next use, and the FOP
+ * configuration is read again.
  */
 @Component
 @Endpoint(id = "xproccaches")

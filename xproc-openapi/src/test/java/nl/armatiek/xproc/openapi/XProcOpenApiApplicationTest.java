@@ -14,6 +14,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import java.io.IOException;
 import java.net.URI;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.attribute.FileTime;
@@ -94,6 +95,24 @@ class XProcOpenApiApplicationTest {
               "<transformed elements=\"2\"><doc><a/></doc></transformed>")));
     }
     assertEquals(1, processor.getCachedStylesheetCount());
+  }
+
+  @Test
+  void formatsWithTheFopConfigurationOfTheConfigDirectory() throws Exception {
+    String fo = "<fo:root xmlns:fo='http://www.w3.org/1999/XSL/Format'><fo:layout-master-set>"
+        + "<fo:simple-page-master master-name='p'><fo:region-body/></fo:simple-page-master>"
+        + "</fo:layout-master-set><fo:page-sequence master-reference='p'>"
+        + "<fo:flow flow-name='xsl-region-body'><fo:block>Hi</fo:block></fo:flow>"
+        + "</fo:page-sequence></fo:root>";
+    byte[] pdf = mvc.perform(post("/api/v1/format").contentType(MediaType.APPLICATION_XML)
+        .content(fo))
+        .andExpect(status().isOk())
+        .andExpect(header().string("Content-Type", "application/pdf"))
+        .andExpect(header().string("Content-Disposition",
+            "attachment; filename=\"document.pdf\""))
+        .andReturn().getResponse().getContentAsByteArray();
+    // fop.xconf in the configuration directory sets the PDF version
+    assertEquals("%PDF-1.7", new String(pdf, 0, 8, StandardCharsets.ISO_8859_1));
   }
 
   @Test

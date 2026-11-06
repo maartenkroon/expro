@@ -63,11 +63,14 @@ public final class XProcProcessor {
   }
 
   /**
-   * Discards the compiled XSLT stylesheets kept for reuse. Use this when stylesheets included or
-   * imported by cached stylesheets have changed; changes to a stylesheet itself are noticed.
+   * Discards the compiled XSLT stylesheets kept for reuse and the Apache FOP factory of
+   * p:xsl-formatter. Use this when stylesheets included or imported by cached stylesheets have
+   * changed (changes to a stylesheet itself are noticed), or when the FOP configuration file or
+   * the fonts it names have changed.
    */
   public void clearCaches() {
     pc.xsltCache.clear();
+    pc.fop.clear();
   }
 
   /** The number of compiled XSLT stylesheets currently kept for reuse. */

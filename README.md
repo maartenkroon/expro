@@ -9,7 +9,9 @@ optional [file](https://spec.xproc.org/3.1/file/),
 [`p:run`](https://spec.xproc.org/3.1/run/),
 [validation](https://spec.xproc.org/3.1/validation/),
 [mail](https://spec.xproc.org/3.1/mail/), [text](https://spec.xproc.org/3.1/text/) and
-[Invisible XML](https://spec.xproc.org/3.1/ixml/) step libraries.
+[Invisible XML](https://spec.xproc.org/3.1/ixml/) step libraries, and `p:xsl-formatter` of
+[paged media](https://spec.xproc.org/3.1/paged-media/), with
+[Apache FOP](https://xmlgraphics.apache.org/fop/) 2.12.
 
 The project consists of three Maven modules:
 
@@ -65,6 +67,7 @@ Usage: xproc [options] PIPELINE [NAME=VALUE ...]
   -n, --namespace PREFIX=URI  Bind a prefix for option names and XPath expressions.
       --serialize NAME=VALUE  Serialization parameter for stdout (e.g. indent=true).
       --safe                  Forbid file and network access and running commands.
+      --fop-config FILE       The Apache FOP configuration (fop.xconf) for p:xsl-formatter.
   -q, --quiet                 Suppress messages.
   -v, --verbose               Report timings and stack traces.
 ```
@@ -95,10 +98,12 @@ The main types:
 
 * `XProcProcessor` – compiles pipelines (from a `File`, `URI`, `Source`, string or `XdmNode`),
   loads, parses and serializes documents. Thread-safe. It keeps compiled XSLT stylesheets (of
-  `p:xslt` and of Schematron schemas) for reuse; `clearCaches()` discards them.
+  `p:xslt` and of Schematron schemas) for reuse; `clearCaches()` discards them, and also makes
+  `p:xsl-formatter` read its FOP configuration again.
 * `XProcConfiguration` – message listener, URI mapper (also used by `p:lookup-uri()`), default
   values for static options, file/network access, locale, the size of the XSLT cache
-  (`setXsltCacheSize`, default 100, 0 disables it), and an optional existing Saxon
+  (`setXsltCacheSize`, default 100, 0 disables it), the Apache FOP configuration file of
+  `p:xsl-formatter` (`setFopConfiguration`, an absolute URI), and an optional existing Saxon
   `Processor`.
 * `XProcPipeline` – a compiled pipeline; exposes its signature (`getInputs()`, `getOutputs()`,
   `getOptions()`) and the serialization parameters of its output ports. Immutable and safe to
@@ -131,8 +136,8 @@ curl 'http://localhost:8080/api/v1/greetings/Ann?lang=nl'
 There are two example configurations:
 
 - [`examples/basic`](xproc-openapi/examples/basic) is a small service: parameters, a request
-  body transformed with a (cached) XSLT stylesheet, a multipart upload, the request
-  information, and an error.
+  body transformed with a (cached) XSLT stylesheet, an XSL-FO body rendered as PDF (with the
+  example `fop.xconf`), a multipart upload, the request information, and an error.
 - [`examples/petstore`](xproc-openapi/examples/petstore) is the well-known
   [Swagger Petstore](https://github.com/swagger-api/swagger-petstore): its OpenAPI description
   (served at `/api/v3`), with pipelines that behave like the reference implementation. The
@@ -271,6 +276,7 @@ curl -X DELETE http://localhost:8080/actuator/xproccaches
 | `xproc.openapi.allow-network-access` | `true` | Allow pipelines to access the network |
 | `xproc.openapi.allow-os-access` | `false` | Allow `p:os-exec` and the details of `p:os-info` |
 | `xproc.openapi.xslt-cache-size` | `100` | The maximum number of compiled stylesheets kept |
+| `xproc.openapi.fop-config` | | The FOP configuration of `p:xsl-formatter`, relative to the configuration directory (default: `fop.xconf` there, if it exists) |
 
 The limits for multipart requests are Spring Boot's `spring.servlet.multipart.*` properties
 (50 MB per file and 100 MB per request by default here). The pipelines are part of the
@@ -294,18 +300,20 @@ the standard step library. The optional step libraries are implemented as well:
 * **Mail steps**: `p:send-mail`.
 * **Text steps**: `p:markdown-to-html`.
 * **Invisible XML**: `p:invisible-xml` (and its former name `p:ixml`).
+* **Paged media**: `p:xsl-formatter`.
 
-PSVI support and the DTD compatibility attribute defaults of
-`p:validate-with-relax-ng` (`dtd-attribute-values`) are not implemented.
+PSVI support, the DTD compatibility attribute defaults of `p:validate-with-relax-ng`
+(`dtd-attribute-values`) and `p:css-formatter` (no CSS formatter is included; the step is
+unknown, `err:XS0044`) are not implemented.
 
 The processor has been tested against the
 [XProc test suite](https://codeberg.org/XProc/test-suite), with the suite's Docker-based HTTP
-test server running. Of the 3133 tests that apply to this processor, 3104 pass (99.1%). Every
-test of the file, operating system, `p:run`, validation, text and Invisible XML steps that
-applies passes,
+test server running. Of the 3135 tests that apply to this processor, 3106 pass (99.1%). Every
+test of the file, operating system, `p:run`, validation, text, Invisible XML and
+`p:xsl-formatter` steps that applies passes,
 126 of the 127 `p:http-request` tests pass, and 53 of the 56 `p:import-functions` and
-`p:function-library-importable` tests pass. The suite's other 230 tests were skipped
-because they need optional features, a Windows host (`p:urify` Windows behaviour), XProc 3.2,
+`p:function-library-importable` tests pass. The suite's other 228 tests were skipped
+because they need optional features (such as `p:css-formatter`), a Windows host (`p:urify` Windows behaviour), XProc 3.2,
 internet access, or the suite's mail test server. `p:send-mail` is covered by this project's
 own tests against an in-process SMTP server instead.
 
@@ -452,6 +460,44 @@ behaviour. The most relevant choices are:
     `fail-on-error` is false, it is an `ixml` element with `ixml:state="failed"` and the error
     message. An ambiguous parse returns one of the parses, marked `ixml:state="ambiguous"`.
   * The `parameters` option is not used. The former step name `p:ixml` is supported.
+* **Paged media** (`p:xsl-formatter`, with [Apache FOP](https://xmlgraphics.apache.org/fop/)
+  2.12):
+  * Without a `content-type`, the result is PDF (`application/pdf`). The other content types
+    are those of FOP's output formats: `application/postscript`, `application/x-pcl` (or
+    `application/vnd.hp-PCL`), `application/x-afp` (or `application/vnd.ibm.modcap`),
+    `application/rtf` (or `text/rtf`, `text/richtext`), `image/png`, `image/tiff`,
+    `text/plain`, and FOP's area tree and intermediate format (`application/X-fop-areatree`,
+    `application/X-fop-intermediate-format`). The content type is matched without regard to
+    case. Others raise `err:XC0204`, including FOP's printing and on-screen preview formats.
+  * Media type parameters do not change the rendering. They are kept on the content type of
+    the result, and the `charset` parameter decodes `text/plain` (and other text) results
+    (default UTF-8). Text results are text documents, the others binary documents. The result
+    has no base URI.
+  * `parameters` without a namespace: `author`, `title`, `subject`, `keywords`, `creator`,
+    `producer` and `creation-date` (an `xs:dateTime` or `xs:date`) set the document metadata;
+    `target-resolution` (dots per inch), `accessibility` (tagged PDF) and `conserve-memory`
+    set FOP's rendering settings. Every other parameter without a namespace is passed to the
+    renderer as a renderer option, as a string. Examples are `version` (`'1.7'`), `pdf-a-mode`
+    (`'PDF/A-2b'`) and `pdf-ua-mode` for PDF. Parameters in a namespace are ignored. An
+    invalid value raises `err:XC0167`.
+  * FOP's warnings and errors, such as a missing image or text that overflows its area, are
+    reported as messages of the step. Its informational messages are not. FOP's errors that
+    stop the formatting, such as an invalid XSL-FO document, raise `err:XC0167`.
+  * Relative URIs in the `src` and `background-image` properties (also inside `url(...)`) are
+    resolved against the base URI of their element, which follows `xml:base`. If there is no
+    base URI, FOP resolves them against the base URI of its configuration.
+  * FOP reads images, fonts and other resources through the processor, so the URI mapper and
+    the file and network access settings apply to them. A resource that may not be read is
+    reported as a warning, and FOP leaves it out. This also applies to the fonts that the FOP
+    configuration names.
+  * The FOP configuration is the file given by `XProcConfiguration.setFopConfiguration`, the
+    CLI's `--fop-config` or the service's `xproc.openapi.fop-config`. Its format is described
+    in [FOP's documentation](https://xmlgraphics.apache.org/fop/2.12/configuration.html), and
+    relative URIs in it (`base`, `font-base`, fonts) are relative to its location. It is read
+    when the step is first used. Without it, FOP's defaults apply: the base 14 PDF fonts and
+    a base URI of the current working directory. A configuration that cannot be read raises
+    `err:XC0167`. `XProcProcessor.clearCaches()`, or the service's `/actuator/xproccaches`,
+    makes the step read it again.
 * **Validation steps**:
   * The `xvrl` report format is supported by every validation step. `p:validate-with-schematron`
     also supports `svrl`, its default. Other values raise `err:XC0117`.
@@ -489,7 +535,8 @@ xproc-core/src/main/java/nl/armatiek/xproc/internal/
     steps/     implementations of the standard steps
 xproc-core/src/main/resources/nl/armatiek/xproc/steps.xpl   step declarations
 xproc-core/src/main/resources/nl/armatiek/xproc/*-steps.xpl declarations of the file, os,
-                                                            validation, mail, text and ixml steps
+                                                            validation, mail, text, ixml and
+                                                            paged media steps
 xproc-cli/src/main/java/nl/armatiek/xproc/cli/Main.java     command line interface
 xproc-openapi/src/main/java/nl/armatiek/xproc/openapi/
     api/         loading the OpenAPI description, operations and parameters, path matching

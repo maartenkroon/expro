@@ -24,6 +24,7 @@ public final class XProcConfiguration {
   private boolean allowOsAccess = true;
   private String locale = java.util.Locale.getDefault().toLanguageTag();
   private int xsltCacheSize = 100;
+  private URI fopConfiguration;
 
   public XProcConfiguration() {
   }
@@ -137,6 +138,23 @@ public final class XProcConfiguration {
     return xsltCacheSize;
   }
 
+  /**
+   * The Apache FOP configuration file (fop.xconf) used by p:xsl-formatter, as an absolute URI.
+   * It is read when the step is first used; relative URIs in it are relative to its location.
+   * Default: none (FOP's defaults).
+   */
+  public XProcConfiguration setFopConfiguration(URI uri) {
+    if (uri != null && !uri.isAbsolute()) {
+      throw new IllegalArgumentException("The FOP configuration URI must be absolute: " + uri);
+    }
+    this.fopConfiguration = uri;
+    return this;
+  }
+
+  public URI getFopConfiguration() {
+    return fopConfiguration;
+  }
+
   XProcConfiguration copy() {
     XProcConfiguration c = new XProcConfiguration();
     c.saxonProcessor = saxonProcessor;
@@ -148,6 +166,7 @@ public final class XProcConfiguration {
     c.allowOsAccess = allowOsAccess;
     c.locale = locale;
     c.xsltCacheSize = xsltCacheSize;
+    c.fopConfiguration = fopConfiguration;
     return c;
   }
 }

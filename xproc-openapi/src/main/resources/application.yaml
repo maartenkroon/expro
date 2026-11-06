@@ -25,6 +25,9 @@ xproc:
     allow-os-access: false
     # Maximum number of compiled XSLT stylesheets kept for reuse
     xslt-cache-size: 100
+    # The Apache FOP configuration (fop.xconf) for p:xsl-formatter, relative to config-dir.
+    # Without this setting, fop.xconf in config-dir is used if it exists.
+    # fop-config: fop.xconf
     # Where the description file is served (Swagger UI shows it)
     description-path: /openapi
 springdoc:

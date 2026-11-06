@@ -2,7 +2,8 @@
 
 Expro is an XProc 3.1 processor for Java 25, built on Saxon 13.1. It covers the core
 language, all required standard steps and the optional step libraries (file, os, p:run,
-validation, mail, text, ixml). README.md is the user-facing documentation. This file holds
+validation, mail, text, ixml, and `p:xsl-formatter` of paged media; there is no
+`p:css-formatter`). README.md is the user-facing documentation. This file holds
 the rules and decisions for working on the code.
 
 ## Rules
@@ -26,7 +27,7 @@ the rules and decisions for working on the code.
 | Module | What it is |
 |---|---|
 | `xproc-core` | The library. Public API in `nl.armatiek.xproc`; everything else is under `internal/`. |
-| `xproc-cli` | Command line interface, shaded into an `-all` jar. `--safe` turns off file, network and OS access. |
+| `xproc-cli` | Command line interface, shaded into an `-all` jar. `--safe` turns off file, network and OS access; `--fop-config` names a fop.xconf. |
 | `xproc-openapi` | Spring Boot service whose API is an OpenAPI 3.1 description in a config directory (`xproc.openapi.config-dir`). Each operation runs `<operationId>.xpl` from that directory. The example configurations are in `xproc-openapi/examples` (`basic`, and `petstore`, the Swagger Petstore; its `data/` directory is created at run time and ignored by git). The pipelines are part of the configuration, so file and network access default to on. springdoc provides only Swagger UI (`/swagger-ui.html`), pointed at the description file served by `DescriptionController`. |
 
 ## Build and test
@@ -45,8 +46,8 @@ the rules and decisions for working on the code.
 - The `p:http-request` tests need the suite's Docker HTTP server on `localhost:8246`; without
   it they are skipped. `nw-http-request-130` sometimes fails on a connection error; run it
   again before you treat it as a regression.
-- **Baseline** with the HTTP server running: 3133 applicable tests, 3104 passed, 29 known
-  failures (listed in README). Without the server: 2978 passed, 28 failed. After a core change,
+- **Baseline** with the HTTP server running: 3135 applicable tests, 3106 passed, 29 known
+  failures (listed in README). Without the server: 2980 passed, 28 failed. After a core change,
   run the full suite and compare the failures by name with these.
 
 ## Code conventions
@@ -116,12 +117,18 @@ the rules and decisions for working on the code.
   | `p:send-mail` | Angus Mail |
   | `p:markdown-to-html` | commonmark-java with the GFM extensions |
   | Invisible XML | Markup Blitz |
+  | `p:xsl-formatter` | Apache FOP (its `xml-apis` is excluded: the JDK has those classes) |
   | OpenAPI parsing | swagger-parser-v3 |
   | Reports | XVRL, plus SVRL for Schematron |
 
 - **Jackson:** the core uses Jackson 3 (`tools.jackson`). Jackson 2 is allowed only in
   `xproc-openapi`, where swagger-parser needs it.
 - Manage dependency versions as properties in the parent POM's `dependencyManagement`.
+- **FOP** (`internal/FopProvider`): one `FopFactory` per processor, created on first use from
+  `XProcConfiguration.setFopConfiguration` (fop.xconf) and dropped by `clearCaches()`. FOP reads
+  resources through `DocumentLoader.read`, so the URI mapper and access settings apply. FOP logs
+  through commons-logging to SLF4J; the CLI has `slf4j-nop` so no SLF4J warning is printed.
+  FOP's warnings and errors reach the user as step messages through its event listener.
 
 ## xproc-openapi specifics
 

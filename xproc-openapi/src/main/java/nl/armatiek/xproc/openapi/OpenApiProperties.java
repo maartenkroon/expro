@@ -1,5 +1,6 @@
 package nl.armatiek.xproc.openapi;
 
+import java.nio.file.Files;
 import java.nio.file.Path;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
@@ -20,11 +21,13 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  * @param allowNetworkAccess whether pipelines may access the network
  * @param allowOsAccess whether pipelines may run commands and read the environment
  * @param xsltCacheSize the maximum number of compiled XSLT stylesheets kept for reuse
+ * @param fopConfig the Apache FOP configuration file (fop.xconf) for p:xsl-formatter, relative
+ *        to the configuration directory; if not set, fop.xconf in that directory if it exists
  */
 @ConfigurationProperties("xproc.openapi")
 public record OpenApiProperties(Path configDir, String description, String basePath,
     String descriptionPath, Boolean checkModified, Long maxRequestSize, Boolean allowFileAccess,
-    Boolean allowNetworkAccess, Boolean allowOsAccess, Integer xsltCacheSize) {
+    Boolean allowNetworkAccess, Boolean allowOsAccess, Integer xsltCacheSize, Path fopConfig) {
 
   public OpenApiProperties {
     if (configDir == null) {
@@ -38,5 +41,10 @@ public record OpenApiProperties(Path configDir, String description, String baseP
     allowNetworkAccess = allowNetworkAccess == null || allowNetworkAccess;
     allowOsAccess = allowOsAccess != null && allowOsAccess;
     xsltCacheSize = xsltCacheSize == null ? 100 : xsltCacheSize;
+    if (fopConfig != null) {
+      fopConfig = configDir.resolve(fopConfig).normalize();
+    } else if (Files.isRegularFile(configDir.resolve("fop.xconf"))) {
+      fopConfig = configDir.resolve("fop.xconf");
+    }
   }
 }

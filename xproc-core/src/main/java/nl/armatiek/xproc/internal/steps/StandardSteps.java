@@ -19,6 +19,7 @@ final class StandardSteps {
     MailSteps.register(r);
     TextFormatSteps.register(r);
     IxmlSteps.register(r);
+    PagedMediaSteps.register(r);
     r.register("xinclude", XIncludeStep::new);
     r.register("http-request", HttpRequestStep::new);
   }

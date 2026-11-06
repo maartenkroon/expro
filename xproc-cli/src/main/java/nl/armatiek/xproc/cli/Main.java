@@ -86,6 +86,8 @@ public final class Main {
                                     (for example indent=true).
             --safe                  Forbid file and network access to resources and
                                     running commands (p:os-exec).
+            --fop-config FILE       The Apache FOP configuration file (fop.xconf) for
+                                    p:xsl-formatter.
         -q, --quiet                 Suppress messages ([p:]message, p:message, xsl:message).
         -v, --verbose               Report run times and stack traces on errors.
         -h, --help                  Show this help.
@@ -107,6 +109,7 @@ public final class Main {
     boolean quiet = false;
     boolean verbose = false;
     boolean safe = false;
+    URI fopConfig = null;
     try {
       for (int i = 0; i < args.length; i++) {
         String a = args[i];
@@ -156,6 +159,7 @@ public final class Main {
             serialization.put(kv[0], kv[1]);
           }
           case "--safe" -> safe = true;
+          case "--fop-config" -> fopConfig = toUri(value(args, ++i, a));
           case "-q", "--quiet" -> quiet = true;
           case "-v", "--verbose" -> verbose = true;
           default -> {
@@ -185,7 +189,8 @@ public final class Main {
         .setMessageListener(quiet ? MessageListener.SILENT : MessageListener.STDERR)
         .setAllowFileAccess(!safe)
         .setAllowNetworkAccess(!safe)
-        .setAllowOsAccess(!safe);
+        .setAllowOsAccess(!safe)
+        .setFopConfiguration(fopConfig);
     try {
       XProcProcessor processor = new XProcProcessor(config);
       Map<QName, XdmValue> staticValues = new LinkedHashMap<>();

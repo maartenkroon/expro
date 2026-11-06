@@ -149,7 +149,7 @@ public final class PipelineParser {
   /** The resources holding the declarations of the standard and additional step libraries. */
   private static final List<String> STEP_LIBRARIES = List.of("steps.xpl", "file-steps.xpl",
       "os-steps.xpl", "validation-steps.xpl", "mail-steps.xpl", "text-steps.xpl",
-      "ixml-steps.xpl");
+      "ixml-steps.xpl", "paged-media-steps.xpl");
 
   /** Parses the standard step library declarations into the processor context. */
   public static void loadStandardLibrary(ProcessorContext pc) {
