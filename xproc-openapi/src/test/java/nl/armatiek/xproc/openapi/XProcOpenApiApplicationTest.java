@@ -22,7 +22,6 @@ import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
-import java.util.stream.Stream;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -38,7 +37,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import jakarta.servlet.http.Cookie;
 import nl.armatiek.xproc.XProcProcessor;
 
-/** Runs the example service of the example directory. */
+/** Runs the example service of examples/basic. */
 @SpringBootTest
 @AutoConfigureMockMvc
 class XProcOpenApiApplicationTest {
@@ -48,11 +47,7 @@ class XProcOpenApiApplicationTest {
 
   @DynamicPropertySource
   static void properties(DynamicPropertyRegistry registry) throws IOException {
-    try (Stream<Path> files = Files.list(Path.of("example"))) {
-      for (Path f : files.toList()) {
-        Files.copy(f, configDir.resolve(f.getFileName()));
-      }
-    }
+    Examples.copy("basic", configDir);
     registry.add("xproc.openapi.config-dir", configDir::toString);
   }
 

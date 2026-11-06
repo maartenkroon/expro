@@ -28,7 +28,7 @@ the rules and decisions for working on the code.
 | `xproc-core` | The library. Public API in `nl.armatiek.xproc`; everything else is under `internal/`. |
 | `xproc-cli` | Command line interface, shaded into an `-all` jar. `--safe` turns off file, network and OS access. |
 | `xproc-rest` | Spring Boot 4.1.2 REST service, **schema first**. Edit `src/main/resources/static/openapi.yaml`; openapi-generator 7.26.0 generates the interfaces (`interfaceOnly`, `useSpringBoot4`) and the controllers implement them. Clients upload pipelines, so file, network and OS access default to off. |
-| `xproc-openapi` | Spring Boot service whose API is an OpenAPI 3.1 description in a config directory (`xproc.openapi.config-dir`). Each operation runs `<operationId>.xpl` from that directory. The example configuration is in `xproc-openapi/example`. The pipelines are part of the configuration, so file and network access default to on. springdoc provides only Swagger UI (`/swagger-ui.html`), pointed at the description file served by `DescriptionController`. |
+| `xproc-openapi` | Spring Boot service whose API is an OpenAPI 3.1 description in a config directory (`xproc.openapi.config-dir`). Each operation runs `<operationId>.xpl` from that directory. The example configurations are in `xproc-openapi/examples` (`basic`, and `petstore`, the Swagger Petstore; its `data/` directory is created at run time and ignored by git). The pipelines are part of the configuration, so file and network access default to on. springdoc provides only Swagger UI (`/swagger-ui.html`), pointed at the description file served by `DescriptionController`. |
 
 ## Build and test
 
@@ -148,6 +148,12 @@ the rules and decisions for working on the code.
   - Use `MockPart`, not `.file()`, so `getParts()` sees the files.
   - Pass `URI.create(...)` for URLs that are already percent-encoded.
   - Run the real jar once with curl for changes to request handling.
+- Common step attributes on steps outside the `p:` namespace (such as the petstore's `ps:`
+  steps) are written `p:depends`, `p:message`; plain `depends` is taken as an option (XS0031).
+- `p:xslt` passes `parameters` as stylesheet parameters (not to the named template), and
+  returns maps and arrays only with `<xsl:output build-tree="no"/>` or method json.
+- Tests copy an example directory with `Examples.copy(...)` into a `@TempDir`, so the tests never
+  write into `examples/`.
 - In example and test pipelines, declare `xmlns:xs` when using `xs:` types. Put
   `expand-text="false"` on `p:inline` JSON such as `{}`, and `exclude-inline-prefixes="#all"`
   to keep namespace declarations out of results.

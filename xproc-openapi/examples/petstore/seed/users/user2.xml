@@ -1,0 +1,10 @@
+<user>
+  <id>2</id>
+  <username>user2</username>
+  <firstName>first name 2</firstName>
+  <lastName>last name 2</lastName>
+  <email>email2@test.com</email>
+  <password>XXXXXXXXXXX</password>
+  <phone>123-456-7890</phone>
+  <userStatus>2</userStatus>
+</user>

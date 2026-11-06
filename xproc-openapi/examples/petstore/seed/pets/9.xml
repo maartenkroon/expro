@@ -1,0 +1,23 @@
+<pet>
+  <id>9</id>
+  <name>Lion 3</name>
+  <category>
+    <id>4</id>
+    <name>Lions</name>
+  </category>
+  <photoUrls>
+    <photoUrl>url1</photoUrl>
+    <photoUrl>url2</photoUrl>
+  </photoUrls>
+  <tags>
+    <tag>
+      <id>1</id>
+      <name>tag3</name>
+    </tag>
+    <tag>
+      <id>2</id>
+      <name>tag4</name>
+    </tag>
+  </tags>
+  <status>available</status>
+</pet>

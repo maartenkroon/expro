@@ -1,0 +1,23 @@
+<pet>
+  <id>6</id>
+  <name>Dog 3</name>
+  <category>
+    <id>1</id>
+    <name>Dogs</name>
+  </category>
+  <photoUrls>
+    <photoUrl>url1</photoUrl>
+    <photoUrl>url2</photoUrl>
+  </photoUrls>
+  <tags>
+    <tag>
+      <id>1</id>
+      <name>tag3</name>
+    </tag>
+    <tag>
+      <id>2</id>
+      <name>tag4</name>
+    </tag>
+  </tags>
+  <status>pending</status>
+</pet>

@@ -193,13 +193,28 @@ resolves `$ref` references, and is loaded when the service starts.
 
 ```bash
 java -jar xproc-openapi/target/xproc-openapi-1.0.0-SNAPSHOT.jar \
-     --xproc.openapi.config-dir=xproc-openapi/example
+     --xproc.openapi.config-dir=xproc-openapi/examples/basic
 curl 'http://localhost:8080/api/v1/greetings/Ann?lang=nl'
 ```
 
-[`xproc-openapi/example`](xproc-openapi/example) is a small example service: parameters,
-a request body transformed with a (cached) XSLT stylesheet, a multipart upload, the request
-information, and an error.
+There are two example configurations:
+
+- [`examples/basic`](xproc-openapi/examples/basic) is a small service: parameters, a request
+  body transformed with a (cached) XSLT stylesheet, a multipart upload, the request
+  information, and an error.
+- [`examples/petstore`](xproc-openapi/examples/petstore) is the well-known
+  [Swagger Petstore](https://github.com/swagger-api/swagger-petstore): its OpenAPI description
+  (served at `/api/v3`), with pipelines that behave like the reference implementation. The
+  pets, orders and users are XML files in `examples/petstore/data`, which is created from
+  `seed/` (the data of the reference implementation) on first use; delete it to start over.
+  Request bodies can be JSON, XML or form data, and a response is XML when the first media
+  type in `Accept` is `application/xml`, otherwise JSON. The shared steps are in
+  `lib/petstore.xpl`, the conversions in `lib/petstore.xsl`. As in the reference
+  implementation, authentication is not checked, the inventory adds up the quantities of the
+  orders by status, deleting something that does not exist still succeeds, and an uploaded
+  image is stored as a file whose location is added to the photo URLs of the pet. Unlike it,
+  a pet or order without an id gets the next free one, and a pet with two of the requested
+  tags is listed once.
 
 Swagger UI ([springdoc](https://springdoc.org/)) shows the description at `/swagger-ui.html`,
 where every operation can also be tried out. It displays the description file as it is, served
@@ -553,7 +568,8 @@ xproc-rest/src/main/java/nl/armatiek/xproc/rest/
 xproc-openapi/src/main/java/nl/armatiek/xproc/openapi/
     api/         loading the OpenAPI description, operations and parameters, path matching
     web/         request to pipeline mapping, responses, RFC 9457 problem details
-xproc-openapi/example/                                      an example configuration directory
+xproc-openapi/examples/basic/                               a small example configuration
+xproc-openapi/examples/petstore/                            the Swagger Petstore in XProc
 ```
 
 `steps.xpl` contains the step declarations published as an ancillary file of the XProc 3.1

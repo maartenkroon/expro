@@ -1,0 +1,8 @@
+<order>
+  <id>2</id>
+  <petId>1</petId>
+  <quantity>50</quantity>
+  <shipDate>2026-01-01T12:00:00Z</shipDate>
+  <status>approved</status>
+  <complete>true</complete>
+</order>
