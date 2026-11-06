@@ -33,6 +33,21 @@ public record ApiDescription(Path file, FileTime lastModified, String basePath,
   }
 
   /**
+   * True if a request path belongs to the API: it is under the base path or, if the API is
+   * served at the root, it matches a path template. Other paths are left to the rest of the
+   * application (Swagger UI, static resources).
+   *
+   * @param path the request path within the application (not decoded)
+   */
+  public boolean claims(String path) {
+    if (!basePath.isEmpty()) {
+      return path.equals(basePath) || path.startsWith(basePath + "/");
+    }
+    PathContainer container = PathContainer.parsePath(path);
+    return operations.stream().anyMatch(op -> op.pattern().matches(container));
+  }
+
+  /**
    * Finds the operation for a request.
    *
    * @param method the HTTP method

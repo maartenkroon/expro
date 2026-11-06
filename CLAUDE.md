@@ -28,7 +28,7 @@ the rules and decisions for working on the code.
 | `xproc-core` | The library. Public API in `nl.armatiek.xproc`; everything else is under `internal/`. |
 | `xproc-cli` | Command line interface, shaded into an `-all` jar. `--safe` turns off file, network and OS access. |
 | `xproc-rest` | Spring Boot 4.1.2 REST service, **schema first**. Edit `src/main/resources/static/openapi.yaml`; openapi-generator 7.26.0 generates the interfaces (`interfaceOnly`, `useSpringBoot4`) and the controllers implement them. Clients upload pipelines, so file, network and OS access default to off. |
-| `xproc-openapi` | Spring Boot service whose API is an OpenAPI 3.1 description in a config directory (`xproc.openapi.config-dir`). Each operation runs `<operationId>.xpl` from that directory. The example configuration is in `xproc-openapi/example`. The pipelines are part of the configuration, so file and network access default to on. |
+| `xproc-openapi` | Spring Boot service whose API is an OpenAPI 3.1 description in a config directory (`xproc.openapi.config-dir`). Each operation runs `<operationId>.xpl` from that directory. The example configuration is in `xproc-openapi/example`. The pipelines are part of the configuration, so file and network access default to on. springdoc provides only Swagger UI (`/swagger-ui.html`), pointed at the description file served by `DescriptionController`. |
 
 ## Build and test
 
@@ -126,6 +126,13 @@ the rules and decisions for working on the code.
 
 ## xproc-openapi specifics
 
+- API requests are routed by `ApiHandlerMapping` (after the annotated controllers, before the
+  static resources) to `PipelineController`, an `HttpRequestHandler`. It claims only paths of
+  the API (`ApiDescription.claims`). Don't go back to a `@RequestMapping("/**")` controller:
+  it would hide Swagger UI's static files.
+- swagger-parser runs on the jakarta Swagger models that springdoc brings in. The non-jakarta
+  `swagger-core` and `swagger-models` are excluded, because both would put the same classes on
+  the classpath. Keep springdoc and swagger-parser versions that agree on swagger-core 2.2.x.
 - Option namespaces are in `OpenApiNs`: `…/parameter/{path,query,header,cookie}`,
   `…/multipart/part`, `…/request` and `…/response` (the `resp:status` and `resp:headers`
   document properties). They are part of the public contract, so don't rename them.

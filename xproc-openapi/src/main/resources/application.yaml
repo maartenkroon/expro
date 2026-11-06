@@ -1,6 +1,10 @@
 spring:
   application:
     name: xproc-openapi
+  mvc:
+    problemdetails:
+      # Requests outside the API (unknown paths) also get RFC 9457 problem details
+      enabled: true
   servlet:
     multipart:
       max-file-size: 50MB
@@ -21,6 +25,15 @@ xproc:
     allow-os-access: false
     # Maximum number of compiled XSLT stylesheets kept for reuse
     xslt-cache-size: 100
+    # Where the description file is served (Swagger UI shows it)
+    description-path: /openapi
+springdoc:
+  # springdoc only provides Swagger UI here: the API is the description in the configuration
+  # directory, not the (empty) description springdoc would generate from the controllers
+  swagger-ui:
+    path: /swagger-ui.html
+    url: ${xproc.openapi.description-path}
+    try-it-out-enabled: true
 management:
   endpoints:
     web:

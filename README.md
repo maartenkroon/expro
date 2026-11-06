@@ -201,12 +201,23 @@ curl 'http://localhost:8080/api/v1/greetings/Ann?lang=nl'
 a request body transformed with a (cached) XSLT stylesheet, a multipart upload, the request
 information, and an error.
 
+Swagger UI ([springdoc](https://springdoc.org/)) shows the description at `/swagger-ui.html`,
+where every operation can also be tried out. It displays the description file as it is, served
+at `/openapi` (`xproc.openapi.description-path`), so a reloaded description shows up at once.
+springdoc's own generated description (`/v3/api-docs`) is empty: the API is the description
+in the configuration directory, not the controllers of the application. Swagger UI cannot
+follow `$ref`s to other files, because only the description file itself is served. The
+`springdoc.swagger-ui.*` properties configure the UI, and `springdoc.swagger-ui.enabled=false`
+turns it off.
+
 ### Requests
 
 The API paths are served under the path of the first server URL of the description (for
 example `/api/v1`), or under `xproc.openapi.base-path`. A request is matched against the path
 templates, most specific first; no match gives 404 and a path without the request method 405
-(with an `Allow` header). An operation without an `operationId` or without a pipeline file gives
+(with an `Allow` header). Other paths (Swagger UI, `/openapi`, the actuator endpoints) are not
+part of the API; an API served at the root takes only the paths that match its templates, so
+avoid templates such as `/openapi` or `/swagger-ui/...` there. An operation without an `operationId` or without a pipeline file gives
 501. Everything the request carries is passed to the pipeline:
 
 | From the request | To the pipeline |
@@ -307,6 +318,7 @@ curl -X DELETE http://localhost:8080/actuator/xproccaches
 | `xproc.openapi.config-dir` | `./config` | The directory with the description and the pipelines |
 | `xproc.openapi.description` | | The description file name (default: `openapi.yaml`, `openapi.yml` or `openapi.json`) |
 | `xproc.openapi.base-path` | | The path under which the API is served (default: the path of the first server URL) |
+| `xproc.openapi.description-path` | `/openapi` | The path at which the description file is served (for Swagger UI) |
 | `xproc.openapi.check-modified` | `true` | Load changed description and pipeline files again |
 | `xproc.openapi.max-request-size` | `10485760` | The maximum size in bytes of a request body that is not multipart |
 | `xproc.openapi.allow-file-access` | `true` | Allow pipelines to read and write `file:` URIs |

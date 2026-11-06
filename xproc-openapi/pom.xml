@@ -18,6 +18,7 @@
   <properties>
     <spring-boot.version>4.1.2</spring-boot.version>
     <swagger-parser.version>2.1.48</swagger-parser.version>
+    <springdoc.version>3.2.0</springdoc.version>
   </properties>
 
   <dependencyManagement>
@@ -50,6 +51,24 @@
       <groupId>io.swagger.parser.v3</groupId>
       <artifactId>swagger-parser-v3</artifactId>
       <version>${swagger-parser.version}</version>
+      <exclusions>
+        <!-- The parser uses the jakarta flavour of the Swagger models that springdoc brings in
+             (the same classes; both on the classpath would clash) -->
+        <exclusion>
+          <groupId>io.swagger.core.v3</groupId>
+          <artifactId>swagger-core</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>io.swagger.core.v3</groupId>
+          <artifactId>swagger-models</artifactId>
+        </exclusion>
+      </exclusions>
+    </dependency>
+    <dependency>
+      <!-- Swagger UI for the OpenAPI description (see the springdoc.* properties) -->
+      <groupId>org.springdoc</groupId>
+      <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
+      <version>${springdoc.version}</version>
     </dependency>
     <dependency>
       <groupId>org.springframework.boot</groupId>

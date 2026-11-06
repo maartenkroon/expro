@@ -3,7 +3,7 @@ info:
   title: Example XProc service
   version: 1.0.0
   description: >
-    Each operation is implemented by the XProc pipeline <operationId>.xpl in this directory.
+    Each operation is implemented by the XProc pipeline `<operationId>.xpl` in this directory.
 servers:
   - url: /api/v1
 paths:

@@ -12,6 +12,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  *        if not set, the first of openapi.yaml, openapi.yml and openapi.json that exists
  * @param basePath the path under which the API paths are served; if not set, the path of the
  *        first server URL of the description (or the root)
+ * @param descriptionPath the path at which the description file is served (for Swagger UI)
  * @param checkModified whether the description and pipeline files are checked for changes on
  *        each request (changed files are loaded again)
  * @param maxRequestSize the maximum size in bytes of a request body that is not multipart
@@ -22,7 +23,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  */
 @ConfigurationProperties("xproc.openapi")
 public record OpenApiProperties(Path configDir, String description, String basePath,
-    Boolean checkModified, Long maxRequestSize, Boolean allowFileAccess,
+    String descriptionPath, Boolean checkModified, Long maxRequestSize, Boolean allowFileAccess,
     Boolean allowNetworkAccess, Boolean allowOsAccess, Integer xsltCacheSize) {
 
   public OpenApiProperties {
@@ -30,6 +31,7 @@ public record OpenApiProperties(Path configDir, String description, String baseP
       throw new IllegalArgumentException("xproc.openapi.config-dir must be set");
     }
     configDir = configDir.toAbsolutePath().normalize();
+    descriptionPath = descriptionPath == null ? "/openapi" : descriptionPath;
     checkModified = checkModified == null || checkModified;
     maxRequestSize = maxRequestSize == null ? 10L * 1024 * 1024 : maxRequestSize;
     allowFileAccess = allowFileAccess == null || allowFileAccess;

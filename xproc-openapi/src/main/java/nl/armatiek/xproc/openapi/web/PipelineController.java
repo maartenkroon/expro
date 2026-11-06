@@ -6,8 +6,8 @@ import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
-import org.springframework.stereotype.Controller;
-import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.stereotype.Component;
+import org.springframework.web.HttpRequestHandler;
 
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -20,12 +20,12 @@ import nl.armatiek.xproc.openapi.api.ApiDescription;
 import nl.armatiek.xproc.openapi.api.OperationSpec;
 
 /**
- * Handles every request (other than the actuator endpoints): finds the operation of the OpenAPI
- * description, runs its pipeline and writes the result or a problem detail. Requests are
+ * Handles the requests of the API (see {@link ApiHandlerMapping}): finds the operation of the
+ * OpenAPI description, runs its pipeline and writes the result or a problem detail. Requests are
  * independent; the shared description, compiled pipelines and processor are thread-safe.
  */
-@Controller
-public class PipelineController {
+@Component
+public class PipelineController implements HttpRequestHandler {
 
   private static final Logger LOG = LoggerFactory.getLogger(PipelineController.class);
 
@@ -44,8 +44,8 @@ public class PipelineController {
     this.problems = problems;
   }
 
-  @RequestMapping("/**")
-  public void handle(HttpServletRequest request, HttpServletResponse response)
+  @Override
+  public void handleRequest(HttpServletRequest request, HttpServletResponse response)
       throws IOException {
     OperationSpec operation = null;
     XProcPipeline pipeline = null;
