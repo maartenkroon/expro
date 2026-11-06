@@ -13,12 +13,11 @@ optional [file](https://spec.xproc.org/3.1/file/),
 
 The project consists of three Maven modules:
 
-| Module       | Contents                                                                 |
-|--------------|--------------------------------------------------------------------------|
-| `xproc-core` | The processor as a library with a small public API (`nl.armatiek.xproc`) |
-| `xproc-cli`  | A command line interface, packaged as an executable "fat" jar            |
-| `xproc-rest` | A Spring Boot web application with an OpenAPI-defined REST interface     |
-| `xproc-openapi` | A Spring Boot web service whose OpenAPI operations are XProc pipelines |
+| Module          | Contents                                                                 |
+|-----------------|--------------------------------------------------------------------------|
+| `xproc-core`    | The processor as a library with a small public API (`nl.armatiek.xproc`) |
+| `xproc-cli`     | A command line interface, packaged as an executable "fat" jar            |
+| `xproc-openapi` | A Spring Boot web service whose OpenAPI operations are XProc pipelines   |
 
 ## Building
 
@@ -30,8 +29,7 @@ Maven does not need to be installed; the Maven wrapper is included:
 
 This produces `xproc-core/target/xproc-core-1.0.0-SNAPSHOT.jar` and the executable
 `xproc-cli/target/xproc-cli-1.0.0-SNAPSHOT-all.jar` (which includes all dependencies) and the
-executable Spring Boot jars `xproc-rest/target/xproc-rest-1.0.0-SNAPSHOT.jar` and
-`xproc-openapi/target/xproc-openapi-1.0.0-SNAPSHOT.jar`.
+executable Spring Boot jar `xproc-openapi/target/xproc-openapi-1.0.0-SNAPSHOT.jar`.
 
 The Saxon edition is chosen with a Maven profile. `Saxon-HE` (Saxon-HE from Maven Central) is
 the default; `Saxon-PE` and `Saxon-EE` use Saxon-PE or Saxon-EE from the
@@ -114,73 +112,6 @@ The main types:
 A compiled stylesheet is identified by a digest of the stylesheet document, its base URI and
 its static parameters, so a changed stylesheet is compiled again. Modules it includes or imports
 are not part of the digest: call `clearCaches()` after changing them.
-
-## REST service
-
-The `xproc-rest` module is a Spring Boot 4 application that exposes the library through a REST
-interface. The interface is developed schema first: the OpenAPI 3 specification
-[`openapi.yaml`](xproc-rest/src/main/resources/static/openapi.yaml) is the source of truth.
-At build time, OpenAPI Generator turns it into the Java API interfaces and models
-(`nl.armatiek.xproc.rest.api`, `nl.armatiek.xproc.rest.model`), and the controllers implement
-those interfaces.
-
-```bash
-java -jar xproc-rest/target/xproc-rest-1.0.0-SNAPSHOT.jar
-```
-
-The service listens on port 8080. Swagger UI for the specification is served at `/`, and the
-specification itself at `/openapi.yaml`. All API operations are under `/api/v1`:
-
-| Operation                                     | Purpose                                              |
-|-----------------------------------------------|------------------------------------------------------|
-| `GET /processor`                              | Processor and Saxon version, access settings         |
-| `GET /pipelines`                              | List the stored pipelines                            |
-| `PUT /pipelines/{id}`                         | Compile a pipeline (XML request body) and store it   |
-| `GET /pipelines/{id}`                         | The signature of a pipeline (ports and options)      |
-| `GET /pipelines/{id}/source`                  | The pipeline document as uploaded                    |
-| `DELETE /pipelines/{id}`                      | Remove a pipeline                                    |
-| `POST /pipelines/{id}/runs`                   | Run a pipeline: JSON documents in, JSON documents out |
-| `POST /pipelines/{id}/transform`              | Run a pipeline: raw document in, raw document out    |
-| `POST /runs`                                  | Compile and run a pipeline in one request            |
-
-For example:
-
-```bash
-curl -X PUT -H 'Content-Type: application/xml' --data-binary @pipeline.xpl \
-     http://localhost:8080/api/v1/pipelines/my-pipeline
-curl -X POST -H 'Content-Type: application/xml' --data-binary @in.xml \
-     'http://localhost:8080/api/v1/pipelines/my-pipeline/transform?option=param=value'
-curl -X POST -H 'Content-Type: application/json' http://localhost:8080/api/v1/pipelines/my-pipeline/runs \
-     -d '{"inputs": {"source": [{"contentType": "application/xml", "content": "<doc/>"}]},
-          "options": {"param": "value"}}'
-```
-
-In the JSON envelopes, the `content` of XML, HTML, JSON and text documents is text, and the
-content of binary documents is base64 (`"encoding": "base64"`). A run also returns the messages
-that the pipeline produced (`[p:]message`, `p:message`, `xsl:message`).
-
-Errors are returned as RFC 9457 problem details (`application/problem+json`) with the XProc
-error code, the location and the failing step. Static errors give status 400, dynamic errors
-422, and unknown pipelines 404.
-
-Stored pipelines are kept in memory. The service is configured with Spring Boot properties
-(for example `--xproc.allow-file-access=true`):
-
-| Property                     | Default | Meaning                                         |
-|------------------------------|---------|-------------------------------------------------|
-| `xproc.allow-file-access`    | `false` | Allow pipelines to read and write `file:` URIs  |
-| `xproc.allow-network-access` | `false` | Allow pipelines to access the network (and send mail) |
-| `xproc.allow-os-access`      | `false` | Allow `p:os-exec` and the details of `p:os-info` |
-| `xproc.locale`               |         | The value of the `p:locale` system property     |
-| `xproc.max-pipelines`        | `1000`  | The maximum number of stored pipelines          |
-
-Clients supply the pipelines they run, so file, network and operating system access are off
-by default. With file access off, the file steps fail with their "access restrictions" error
-codes. With OS access off, `p:os-exec` fails with `err:XC0033`, and `p:os-info` reports no
-environment variables and leaves the user and working directory attributes empty. Do not turn
-these settings on for a service that untrusted clients can reach. The service has no
-authentication of its own, so put it behind a gateway that adds authentication before you
-expose it.
 
 ## OpenAPI pipeline service
 
@@ -342,9 +273,8 @@ curl -X DELETE http://localhost:8080/actuator/xproccaches
 | `xproc.openapi.xslt-cache-size` | `100` | The maximum number of compiled stylesheets kept |
 
 The limits for multipart requests are Spring Boot's `spring.servlet.multipart.*` properties
-(50 MB per file and 100 MB per request by default here). Unlike in `xproc-rest`, the pipelines
-are part of the configuration rather than supplied by clients, so file and network access are
-on by default. The service has no authentication of its own: put it behind a gateway that adds
+(50 MB per file and 100 MB per request by default here). The pipelines are part of the
+configuration rather than supplied by clients, so file and network access are on by default. The service has no authentication of its own: put it behind a gateway that adds
 it, and keep the actuator endpoints away from clients (for example with
 `management.server.port`), since anyone who can reach `/actuator/xproccaches` can clear the
 caches.
@@ -561,10 +491,6 @@ xproc-core/src/main/resources/nl/armatiek/xproc/steps.xpl   step declarations
 xproc-core/src/main/resources/nl/armatiek/xproc/*-steps.xpl declarations of the file, os,
                                                             validation, mail, text and ixml steps
 xproc-cli/src/main/java/nl/armatiek/xproc/cli/Main.java     command line interface
-xproc-rest/src/main/resources/static/openapi.yaml           REST interface specification
-xproc-rest/src/main/java/nl/armatiek/xproc/rest/
-    controller/  implementations of the generated API interfaces, error handling
-    service/     compiling, storing and running pipelines; document conversion
 xproc-openapi/src/main/java/nl/armatiek/xproc/openapi/
     api/         loading the OpenAPI description, operations and parameters, path matching
     web/         request to pipeline mapping, responses, RFC 9457 problem details
